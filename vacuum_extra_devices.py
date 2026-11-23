@@ -85,7 +85,10 @@ def parse_agilent_response(frame: bytes, expected_window: int) -> str:
         raise ValueError(f'Agilent returned wrong window: {payload!r}')
     if payload[3:4] != b'0':
         raise ValueError('Agilent did not return a window read result')
-    return payload[4:].decode('ascclass Agilent4UHVDevice:
+    return payload[4:].decode('ascii').strip()
+
+
+class Agilent4UHVDevice:
     """4UHV RS232 Window Protocol, 9600/8N1, factory RS232 addr 0x80.
 
     Per manual 87-900-137-01(D): pressure 812/822, current 811/821,
@@ -282,8 +285,6 @@ def parse_agilent_response(frame: bytes, expected_window: int) -> str:
                 '' if st.ok else 'No valid Agilent channel pressure returned')
             st.raw = 'Agilent 4UHV Window Protocol (pressure-first, read-only)'
             return st
-
-    return st
 
 
 def modbus_crc16(data: bytes) -> int:
