@@ -54,10 +54,11 @@ def create_shortcuts(root: Path) -> None:
         shortcut = desktop / f'{PRODUCT_NAME}.lnk'
         def quote(s: str) -> str:
             return "'" + s.replace("'", "''") + "'"
+        shortcut_arguments = quote('"' + str(script) + '"')
         ps = ("$W = New-Object -ComObject WScript.Shell; "
               f"$S = $W.CreateShortcut({quote(str(shortcut))}); "
               f"$S.TargetPath = {quote(str(python_exe))}; "
-              f"$S.Arguments = {quote('"' + str(script) + '"')}; "
+              f"$S.Arguments = {shortcut_arguments}; "
               f"$S.WorkingDirectory = {quote(str(script.parent))}; "
               f"$S.Description = 'UHV Sentinel vacuum pressure monitor'; $S.Save()")
         subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps], check=True)

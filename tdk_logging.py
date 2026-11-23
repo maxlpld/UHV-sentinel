@@ -1,6 +1,7 @@
 """Persistent, independent TDK electrical measurement log (UTC epochs)."""
 from __future__ import annotations
 import csv
+from contextlib import closing
 import datetime as dt
 from pathlib import Path
 import sqlite3
@@ -29,7 +30,7 @@ class TDKLogger:
         path = self.weekly_path(reading.timestamp)
         with self.lock:
             path.parent.mkdir(parents=True, exist_ok=True)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db:
                 if str(path) not in self._initialized:
                     db.execute("""CREATE TABLE IF NOT EXISTS tdk_samples (
                         ts REAL NOT NULL, port TEXT NOT NULL, device_name TEXT NOT NULL,
@@ -53,7 +54,7 @@ class TDKLogger:
         with self.lock:
             for path in sorted(self.folder.glob("tdk_measurements_????-W??.sqlite3")):
                 try:
-                    with sqlite3.connect(path) as db:
+                    with closing(sqlite3.connect(path)) as db:
                         if cutoff is None:
                             query = "SELECT ts, voltage_v, current_a, power_w, voltage_set_v, current_set_a, output_state, mode, identity FROM tdk_samples WHERE port=? ORDER BY ts"
                             found.extend(db.execute(query, (port,)).fetchall())
