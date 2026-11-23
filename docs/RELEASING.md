@@ -18,8 +18,8 @@ git push -u origin main
 4. Once CI succeeds, publish the first release:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.0.3
+git push origin v0.0.3
 ```
 
 The `Publish tagged release` workflow generates **two assets**: `uhv-sentinel-release.zip` and `SHA256SUMS.txt`. The app's Options → Update button expects exactly those filenames and a published, non-prerelease GitHub Release. If the repository is private, an unauthenticated updater cannot access its release API; publish the repository or implement authenticated updates.

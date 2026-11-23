@@ -36,4 +36,4 @@ jobs:
             dist/uhv-sentinel-release.zip dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
             --title "UHV Sentinel $TAG" \
-            --notes "Experimental EpiMax TCP transports (Modbus TCP / transparent RTU-over-TCP) plus the existing serial drivers. Network compatibility must be confirmed with the hardware. A USB Ethernet adapter cannot communicate with a serial-only RJ45 socket."
+            --notes "v0.0.3: Agilent pressure-first polling, staggered diagnostics, bounded retries and serial recovery. More reliable update messages and a GitHub Releases fallback. Profiles and recordings are preserved. Real hardware validation remains necessary."

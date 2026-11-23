@@ -63,7 +63,7 @@ def _load_url(url: str, *, max_size: int) -> bytes:
         raise ValueError("Only HTTPS downloads are allowed")
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json" if "api.github.com" in url else "application/octet-stream",
-        "User-Agent": "UHV-Sentinel-Updater/1.0",
+        "User-Agent": "UHV-Sentinel-Updater/0.0.3",
         "X-GitHub-Api-Version": "2022-11-28",
     })
     try:
@@ -95,7 +95,9 @@ def latest_release() -> Release:
     checksum_name = settings.get("checksum_asset", "SHA256SUMS.txt")
     if zip_name not in assets or checksum_name not in assets:
         raise ValueError(f"Release {version} must contain both {zip_name} and {checksum_name} assets")
-    if not all(isinstance(assets[name], str) and assets[name].startswith("https://github.com/")
+    expected_prefix = f"https://github.com/{repo}/releases/download/"
+    if not all(isinstance(assets[name], str) and
+               assets[name].lower().startswith(expected_prefix.lower())
                for name in (zip_name, checksum_name)):
         raise ValueError("Unexpected release asset URL; refusing download")
     return Release(version=version.lstrip("v"), html_url=str(payload.get("html_url", "")),

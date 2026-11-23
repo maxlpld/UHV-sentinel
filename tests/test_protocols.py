@@ -72,6 +72,8 @@ class ProtocolTests(unittest.TestCase):
             dev = Agilent4UHVDevice('COM10')
             dev.open()
             st = dev.read_status()
+            for _ in range(9):
+                st = dev.read_status()  # staggered diagnostics
             dev.close()
         self.assertTrue(st.ok)
         self.assertEqual(list(st.gauges), ['Channel 1', 'Channel 2'])
@@ -81,6 +83,41 @@ class ProtocolTests(unittest.TestCase):
         self.assertIn('Fan temperature (°C)', st.diagnostics)
         # Every request uses the read command 0x30; no writes allowed.
         self.assertTrue(all(cmd[5:6] == b'0' for cmd in dev.ser.sent) if dev.ser else True)
+
+
+    def test_agilent_optional_timeout_does_not_block_pressure(self):
+        dev = Agilent4UHVDevice('COM10')
+        windows = []
+        def query(window):
+            windows.append(window)
+            if window == 600: return '1'
+            if window in (812, 822): return '1.5E-08'
+            raise TimeoutError('unsupported diagnostic window')
+        with patch.object(dev, 'query_window', side_effect=query):
+            first = dev.read_status()
+            second = dev.read_status()
+        self.assertTrue(first.ok)
+        self.assertTrue(second.ok)
+        self.assertEqual(windows[:3], [600, 812, 822])
+        self.assertEqual(windows[4:6], [812, 822])
+        self.assertEqual(sum(w in (812, 822) for w in windows), 4)
+
+    def test_agilent_reopen_after_three_failed_sweeps(self):
+        with patch('vacuum_extra_devices.serial.Serial', FakeSerial):
+            dev = Agilent4UHVDevice('COM10')
+            dev.open()
+            with patch.object(dev, 'query_window', side_effect=TimeoutError('offline')):
+                for _ in range(3):
+                    status = dev.read_status()
+            self.assertFalse(status.ok)
+            self.assertEqual(status.diagnostics['Consecutive failed pressure polls'], 3)
+            self.assertEqual(status.diagnostics['Serial reconnects'], 1)
+            self.assertTrue(dev.ser.is_open)
+            dev.close()
+
+    def test_agilent_eeprom_response_address(self):
+        body = b'\x81' + b'8120' + b'1.5E-08' + b'\x03'
+        self.assertEqual(parse_agilent_response(b'\x02' + body + agilent_crc(body), 812), '1.5E-08')
 
     def test_epimax_request_matches_reference_driver(self):
         req = epimax_fc23_read_request(1, 0x9A)

@@ -1,3 +1,10 @@
+## v0.0.3 — reliability fixes (2026-11-23)
+
+- Read Agilent pressure before optional diagnostic windows; stagger optional requests.
+- Retry pressure reads and attempt rate-limited serial recovery on prolonged loss of data.
+- Show stale/partial pressure status and improve Options → Update guidance and manual download fallback.
+- Document manual migration from old v0.2.0 numbering.
+
 ## v0.0.2 — experimental EpiMax network support
 
 - Added optional read-only Modbus TCP and transparent RTU-over-TCP transports.

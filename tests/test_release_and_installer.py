@@ -121,7 +121,7 @@ class UpdateTests(unittest.TestCase):
             self.assertTrue(json.loads((data / 'last_update.json').read_text())['success'])
 
     def test_release_info_parser_offline(self):
-        assets = [{'name': x, 'browser_download_url': 'https://github.com/example/' + x}
+        assets = [{'name': x, 'browser_download_url': 'https://github.com/maxlpld/UHV-sentinel/releases/download/v0.2.2/' + x}
                   for x in ('uhv-sentinel-release.zip', 'SHA256SUMS.txt')]
         payload = json.dumps({'tag_name': 'v0.2.2', 'html_url': 'https://github.com/a/b',
                               'assets': assets, 'body': 'Fixes'}).encode()

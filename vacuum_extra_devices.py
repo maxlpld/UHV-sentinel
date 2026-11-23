@@ -74,8 +74,8 @@ def agilent_read_frame(window: int) -> bytes:
 def parse_agilent_response(frame: bytes, expected_window: int) -> str:
     if len(frame) < 8 or frame[0] != 2 or frame[-3] != 3:
         raise ValueError(f'Bad Agilent packet framing: {frame.hex(" ")}')
-    if frame[1] != 0x80:
-        raise ValueError('Unexpected Agilent RS232 address')
+    if not 0x80 <= frame[1] <= 0x9f:
+        raise ValueError('Unexpected Agilent response address')
     if frame[-2:].upper() != agilent_crc(frame[1:-2]):
         raise ValueError('Agilent CRC mismatch')
     payload = frame[2:-3]
@@ -85,10 +85,7 @@ def parse_agilent_response(frame: bytes, expected_window: int) -> str:
         raise ValueError(f'Agilent returned wrong window: {payload!r}')
     if payload[3:4] != b'0':
         raise ValueError('Agilent did not return a window read result')
-    return payload[4:].decode('ascii').strip()
-
-
-class Agilent4UHVDevice:
+    return payload[4:].decode('ascclass Agilent4UHVDevice:
     """4UHV RS232 Window Protocol, 9600/8N1, factory RS232 addr 0x80.
 
     Per manual 87-900-137-01(D): pressure 812/822, current 811/821,
@@ -103,6 +100,13 @@ class Agilent4UHVDevice:
         self._units = 'mBar'
         self._last_meta = 0.0
         self._diagnostics = {}
+        self._diag_index = 0
+        self._diag_backoff = {}
+        self._failed_sweeps = 0
+        self._last_reconnect = 0.0
+        self._reconnects = 0
+        self._last_good = 0.0
+        self._last_command = 0.0
 
     def open(self):
         with self.lock:
@@ -112,6 +116,7 @@ class Agilent4UHVDevice:
                                      write_timeout=1.0, bytesize=8, parity='N',
                                      stopbits=1, xonxoff=False, rtscts=False, dsrdtr=False)
             self.ser.reset_input_buffer()
+            self._last_meta = 0.0
 
     def close(self):
         with self.lock:
@@ -137,10 +142,12 @@ class Agilent4UHVDevice:
                 continue
             packet.extend(b)
             if b == b'\x03':
-                suffix = ser.read(2)
-                if len(suffix) != 2:
+                crc = bytearray()
+                while len(crc) < 2 and time.monotonic() < deadline:
+                    crc.extend(ser.read(2 - len(crc)))
+                if len(crc) != 2:
                     raise TimeoutError('Incomplete Agilent CRC')
-                packet.extend(suffix)
+                packet.extend(crc)
                 return bytes(packet)
         raise TimeoutError('Truncated Agilent response')
 
@@ -148,23 +155,33 @@ class Agilent4UHVDevice:
         with self.lock:
             if not self.ser or not self.ser.is_open:
                 raise RuntimeError('Agilent serial port is closed')
+            delay = 0.08 - (time.monotonic() - self._last_command)
+            if delay > 0:
+                time.sleep(delay)
             self.ser.reset_input_buffer()
             self.ser.write(agilent_read_frame(window))
             self.ser.flush()
+            self._last_command = time.monotonic()
             return parse_agilent_response(self._read_frame(), window)
 
     def _optional_window(self, window: int, name: str):
         try:
             return (name, self.query_window(window))
-        except (TimeoutError, ValueError, serial.SerialException):
-            return (name, 'unavailable')
+        except (TimeoutError, ValueError, RuntimeError, OSError, serial.SerialException) as exc:
+            return (name, f'unavailable: {exc}')
 
     def _refresh_metadata(self):
+        # Never sweep optional registers before a pressure acquisition.
         code = int(self.query_window(600))
         if code not in (0, 1, 2):
             raise ValueError(f'Unknown Agilent pressure unit code {code}')
         self._units = {0: 'Torr', 1: 'mBar', 2: 'Pa'}[code]
-        fields = ((108,'Configured baud rate'), (205,'Controller status'),
+        self._last_meta = time.monotonic()
+        self._diagnostics.pop('Metadata error', None)
+
+    def _poll_one_diagnostic(self):
+        # One optional register per acquisition; unsupported ones back off.
+        fields = ((800, 'Fan temperature (°C)'), (821, 'Channel 2 Current (A)')) + ((108,'Configured baud rate'), (205,'Controller status'),
                   (206,'Controller error code'), (319,'Controller model'),
                   (323,'Controller serial'), (503,'RS485 address'),
                   (504,'Serial interface select'), (505,'Error channel selection'),
@@ -179,12 +196,47 @@ class Agilent4UHVDevice:
                   (620,'Pump model CH2'), (622,'Power limit CH2 (W)'),
                   (623,'Target voltage CH2 (V)'), (624,'Protect current CH2 (mA)'),
                   (625,'Setpoint CH2'))
-        self._diagnostics = dict(self._optional_window(num, name) for num, name in fields)
-        self._last_meta = time.monotonic()
+        now = time.monotonic()
+        for _ in range(len(fields)):
+            window, name = fields[self._diag_index % len(fields)]
+            self._diag_index = (self._diag_index + 1) % len(fields)
+            if now < self._diag_backoff.get(window, 0.0):
+                continue
+            _, value = self._optional_window(window, name)
+            self._diagnostics[name] = value
+            if value.startswith('unavailable:'):
+                self._diag_backoff[window] = now + 300
+            break
+
+    def _read_pressure_with_retry(self, window: int) -> float:
+        problem = None
+        for _ in range(2):
+            try:
+                text = self.query_window(window)
+                value = float(text)
+                if not math.isfinite(value) or value <= 0:
+                    raise ValueError(f'Invalid pressure: {text!r}')
+                return value
+            except (TimeoutError, ValueError, RuntimeError, OSError, serial.SerialException) as exc:
+                problem = exc
+        raise ValueError(f'Window {window} failed twice: {problem}')
+
+    def _recover_after_failed_sweeps(self):
+        now = time.monotonic()
+        if self._failed_sweeps < 3 or (self._last_reconnect and now - self._last_reconnect < 12):
+            return
+        self._last_reconnect = now
+        self._reconnects += 1
+        try:
+            self.close()
+            self.open()
+            self._diagnostics['Recovery'] = 'Serial port reopened after repeated pressure failures'
+        except (OSError, RuntimeError, serial.SerialException) as exc:
+            self._diagnostics['Recovery'] = f'Reconnect failed: {exc}'
 
     def read_status(self) -> ExtendedStatus:
         with self.lock:
-            if time.monotonic() - self._last_meta > 60 or self._last_meta == 0:
+            if time.monotonic() - self._last_meta > 120 or self._last_meta == 0:
                 # Metadata is optional, measurements remain available if some
                 # firmware variants disable individual diagnostic windows.
                 try:
@@ -201,26 +253,37 @@ class Agilent4UHVDevice:
                 # Not every 4UHV has both channels populated; no fake pressure
                 # reading is returned for disabled/unconfigured channels.
                 try:
-                    p_text = self.query_window(base + 2)
-                    p = float(p_text)
-                    if not math.isfinite(p) or p <= 0:
-                        raise ValueError(f'Invalid pressure: {p_text!r}')
+                    p = self._read_pressure_with_retry(base + 2)
                 except (TimeoutError, ValueError, serial.SerialException) as exc:
                     diags[f'{key} pressure'] = f'unavailable: {exc}'
                     p = None
                 else:
                     good += 1
-                diags[f'{key} HV on/off'] = self._optional_window(10 + ch, f'{key} HV on/off')[1]
-                for offset, field_name, unit in ((0, 'Voltage', 'V'), (1, 'Current', 'A')):
-                    name = f'{key} {field_name} ({unit})'
-                    diags[name] = self._optional_window(base + offset, name)[1]
+                # Diagnostics are polled later, after both pressures.
                 st.gauges[key] = ReadOnlyGauge(key, ch, 0 if p is not None else 5, p,
                                                self._units, sensor_id='Ion pump')
+            if good:
+                self._failed_sweeps = 0
+                self._last_good = time.time()
+                self._poll_one_diagnostic()
+            else:
+                self._failed_sweeps += 1
+                self._recover_after_failed_sweeps()
+            diags.update(self._diagnostics)
+            diags['Consecutive failed pressure polls'] = self._failed_sweeps
+            diags['Serial reconnects'] = self._reconnects
+            diags['Last valid pressure'] = (time.strftime('%Y-%m-%d %H:%M:%S',
+                time.localtime(self._last_good)) if self._last_good else 'never')
             st.diagnostics = diags
             st.ok = good > 0
-            st.parse_error = '' if st.ok else 'No valid Agilent channel pressure returned'
-            st.raw = 'Agilent 4UHV Window Protocol (read-only)'
+            failed = [f'{name}: {value}' for name, value in diags.items()
+                      if name.endswith(' pressure') and str(value).startswith('unavailable:')]
+            st.parse_error = '; '.join(failed) if failed else (
+                '' if st.ok else 'No valid Agilent channel pressure returned')
+            st.raw = 'Agilent 4UHV Window Protocol (pressure-first, read-only)'
             return st
+
+    return st
 
 
 def modbus_crc16(data: bytes) -> int:

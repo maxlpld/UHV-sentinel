@@ -2,7 +2,7 @@
 
 **UHV Sentinel** is a desktop application for laboratory vacuum and power-supply monitoring. Connect compatible serial instruments, graph pressure / temperature / electrical data, retain SQLite recordings, configure alerts, save portable workspaces and access a read-only browser dashboard on a private LAN.
 
-**Current release: v0.2.0** · Python 3.10+ · Windows / Linux / macOS · [MIT license](LICENSE)
+**Current release: v0.0.3** · Python 3.10+ · Windows / Linux / macOS · [MIT license](LICENSE)
 
 > **Lab safety:** UHV Sentinel is an informational monitor, not a certified safety interlock or pressure protection device. Check every new gauge's measured values and units against its front panel before relying on logs or alerts. Do not connect serial cables without checking each model's electrical interface.
 
@@ -211,3 +211,14 @@ converter. Enter its IP address and TCP port. The documented PVCi, PVCiDuo,
 PVCuni and PVCduo RJ45 communication ports are **serial RS232/RS485**, so
 a USB-to-Ethernet adapter alone cannot connect to them. See
 [device guide](docs/DEVICE_CONNECTION_GUIDE.md) and confirm the exact hardware.
+
+### v0.0.3 — Agilent reliability and updater improvements
+
+- **Agilent pressure priority:** channel pressure windows 812 and 822 are read before optional diagnostics. Only one optional register is queried per cycle; unsupported registers get a five-minute backoff.
+- **Recovery:** each pressure query is retried once. After three full failed pressure sweeps, the serial port is reopened no more frequently than every 12 seconds. These operations never change HV or pump setpoints.
+- **Freshness:** the GUI distinguishes an open serial port from confirmed fresh pressure values and reports partial-channel failures.
+- **Updater:** clearer errors, a GitHub Releases fallback button, and a bounded serial-worker shutdown.
+
+**Version migration:** Earlier standalone archives were v0.2.0, which is semantically higher than the GitHub v0.0.x series. To join the GitHub update series, manually install v0.0.3 once. The installer preserves saved profiles and recorded pressure history. Later versions can use Options → Update.
+
+**Hardware:** These fixes were checked with mock serial responses, not a real Agilent controller. If pressure remains unavailable, inspect the failure counter, reconnect count, controller HV and channel status, and COM/baud settings.

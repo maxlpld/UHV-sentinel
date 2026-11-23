@@ -3414,15 +3414,21 @@ class PfeifferDualGaugePanel(ttk.LabelFrame):
 
     def update_status(self, status: PfeifferStatus) -> None:
         self._latest_status = status
-        self.app.web_monitor.update_panel(self, status)
         if not status.ok:
-            self.error_var.set(f"Status parse error: {status.parse_error}")
+            # An open COM port can remain connected despite lost pressure data.
+            self.connection_var.set("Connected — no fresh pressure")
+            for key in self.gauge_keys:
+                self.pressure_vars[key].set("--- (no fresh reading)")
+            self.error_var.set(f"Pressure read failed: {status.parse_error}")
             self.raw_var.set(f"Raw: {status.raw}")
+            self.diagnostics_var.set("\n".join(
+                f"{k}: {v}" for k, v in getattr(status, "diagnostics", {}).items()))
+            self.app.web_monitor.update_panel(self, status)
             self.evaluate_and_publish_alerts(status)
             return
 
-        self.connection_var.set("Connected")
-        self.error_var.set("")
+        self.connection_var.set("Connected" if not status.parse_error else "Connected — partial pressure data")
+        self.error_var.set(f"Some channels unavailable: {status.parse_error}" if status.parse_error else "")
         for key in self.gauge_keys:
             gauge = status.gauges.get(key)
             if gauge is None:
@@ -3442,6 +3448,7 @@ class PfeifferDualGaugePanel(ttk.LabelFrame):
         self.raw_var.set(f"Raw: {status.raw}")
         diagnostics = getattr(status, "diagnostics", {})
         self.diagnostics_var.set("\n".join(f"{k}: {v}" for k, v in diagnostics.items()))
+        self.app.web_monitor.update_panel(self, status)
         pressure_logger.maybe_log_status(self, status)
         self.request_graph_redraw(status)
         self.evaluate_and_publish_alerts(status)
@@ -3461,8 +3468,10 @@ class PfeifferDualGaugePanel(ttk.LabelFrame):
         self.app.refresh_alert_summary()
 
     def set_error(self, text: str) -> None:
-        self.connection_var.set("Communication error")
+        self.connection_var.set("Communication error — pressure unavailable")
         self.error_var.set(f"Error: {text}")
+        for key in self.gauge_keys:
+            self.pressure_vars[key].set("--- (no fresh reading)")
         self.app.web_monitor.update_error(self, text)
         now = time.time()
         if now - self._last_error_at >= max(1, alert_manager.settings.no_response_seconds):
@@ -4993,6 +5002,10 @@ class UHVSentinelApp(tk.Tk):
         check = ttk.Button(buttons, text="Check for updates", style="Primary.TButton")
         check.pack(side="left", padx=(0, 8))
         check.configure(command=lambda: self.check_for_updates(check, status, win))
+        ttk.Button(buttons, text="Open GitHub releases", style="Secondary.TButton",
+                   command=lambda: __import__('webbrowser').open(
+                       'https://github.com/' + updater.release_settings()['github_repo'] + '/releases/latest')
+                   ).pack(side="left", padx=(0, 8))
         ttk.Button(buttons, text="Close", command=win.destroy, style="Secondary.TButton").pack(side="left")
         ttk.Label(container, text="Updates stop pressure monitoring during installation. "
                   "Recorded data and settings are not removed.", style="Caption.TLabel",
@@ -5029,9 +5042,10 @@ class UHVSentinelApp(tk.Tk):
             installed = (Path(__file__).resolve().parent == (install_dir() / "app").resolve()
                          and (install_dir() / "install.json").is_file())
             if not installed:
-                messagebox.showwarning("Installation required",
-                    "You are running UHV Sentinel from source. Run the platform INSTALL script "
-                    "first to enable safe in-app updates.", parent=owner)
+                status_var.set("Running from an extracted/source folder, not an installed copy. "
+                               "Download the latest release and run INSTALL_WINDOWS.bat "
+                               "(or INSTALL_LINUX_MAC.sh) once. Your data is preserved.")
+                button.configure(state="normal")
                 return
             if not messagebox.askyesno("Install verified update?",
                     f"Install UHV Sentinel v{release.version}?\n\n"
@@ -5053,7 +5067,8 @@ class UHVSentinelApp(tk.Tk):
                 owner.after(180, poll)
                 return
             if kind == "error":
-                status_var.set(str(result))
+                status_var.set("Update check/download failed: " + str(result) +
+                               ". Use 'Open GitHub releases' for manual installation.")
                 button.configure(text="Check for updates", state="normal", command=lambda: self.check_for_updates(button, status_var, owner))
             elif kind == "release":
                 release = result
@@ -5063,7 +5078,10 @@ class UHVSentinelApp(tk.Tk):
                                    "Update installation stops monitoring briefly.")
                     button.configure(text=f"Install v{release.version}", state="normal", command=install_selected)
                 else:
-                    status_var.set(f"You already have the latest published version (v{__version__}).")
+                    status_var.set(f"GitHub latest: v{release.version}. Installed: v{__version__}. "
+                                   "No newer compatible release detected. If you installed "
+                                   "the older v0.2.0 package, use the manual installer "
+                                   "once to join the v0.0.x release series.")
                     button.configure(text="Check again", state="normal", command=lambda: self.check_for_updates(button, status_var, owner))
             elif kind == "download":
                 self.pending_update = result
@@ -5620,10 +5638,14 @@ class UHVSentinelApp(tk.Tk):
                     panel.thread.join(timeout=3.0)
                 if panel.thread.is_alive():
                     continue  # It will release COM in its own finally block.
-            try:
-                panel.device.close()
-            except Exception:
-                pass
+            # Give the serial worker a bounded window to finish its last poll.
+            if panel.thread is not None and panel.thread.is_alive():
+                panel.thread.join(timeout=3.0)
+            if panel.thread is None or not panel.thread.is_alive():
+                try:
+                    panel.device.close()
+                except Exception:
+                    pass
         self.save_config()
         self.web_monitor.stop()
         self.destroy()
