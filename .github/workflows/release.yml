@@ -1,0 +1,38 @@
+name: Publish UHV Sentinel release
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python scripts/build_release.py
+      - name: Publish the release matching version.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="v$(python -c 'from version import __version__; print(__version__)')"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "$TAG" ]]; then
+            echo "Ref $GITHUB_REF_NAME does not match $TAG" >&2
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; not overwriting immutable published assets."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            dist/uhv-sentinel-release.zip dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "UHV Sentinel $TAG" \
+            --notes "Experimental EpiMax TCP transports (Modbus TCP / transparent RTU-over-TCP) plus the existing serial drivers. Network compatibility must be confirmed with the hardware. A USB Ethernet adapter cannot communicate with a serial-only RJ45 socket."

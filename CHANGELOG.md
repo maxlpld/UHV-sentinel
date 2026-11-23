@@ -1,3 +1,11 @@
+## v0.0.2 — experimental EpiMax network support
+
+- Added optional read-only Modbus TCP and transparent RTU-over-TCP transports.
+- Added an EpiMax IP address and TCP port selector.
+- Preserved serial support and panel/profile restoration for TCP endpoints.
+- Restored GitHub CI and automatic release packaging.
+- Hardware compatibility must be checked against the exact EpiMax model.
+
 # Changelog
 
 ## v0.2.0 — TDK monitoring and portable profiles

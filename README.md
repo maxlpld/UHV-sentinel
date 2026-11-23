@@ -202,3 +202,12 @@ To publish your own project to GitHub and enable working updates, follow **[docs
 - This open-source repository does not redistribute vendor PDF manuals. The GUI offers the vendor links instead.
 
 Refer to [the instrument wiring guide](docs/DEVICE_CONNECTION_GUIDE.md) and the original vendor manuals before connecting any high-voltage or serial controller. See [LICENSE](LICENSE) for source code license.
+
+### Experimental EpiMax TCP transport (v0.0.2)
+
+In Device → EpiMax select Ethernet (Modbus TCP) for verified native TCP-capable
+hardware or Ethernet (RTU/TCP gateway) for a properly wired serial-to-network
+converter. Enter its IP address and TCP port. The documented PVCi, PVCiDuo,
+PVCuni and PVCduo RJ45 communication ports are **serial RS232/RS485**, so
+a USB-to-Ethernet adapter alone cannot connect to them. See
+[device guide](docs/DEVICE_CONNECTION_GUIDE.md) and confirm the exact hardware.

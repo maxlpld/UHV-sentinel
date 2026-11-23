@@ -38,6 +38,25 @@ Use the manufacturer's **PVCi-9D232** cable or a cable wired following the actua
 
 The new EpiMax driver addresses the **PVCi ion gauge 1** through read-only Modbus function 23, register 0x9A. The unit (mBar, Torr, Pa) **must agree with the physical controller**. Its full model and firmware should be confirmed before any laboratory use. The other PVCiDuo ion gauge is intentionally unsupported pending its exact register map.
 
+## Experimental EpiMax TCP/IP option (v0.0.2)
+
+The EpiMax connection selector now offers **Ethernet (Modbus TCP)** for
+genuinely network-capable instruments and **Ethernet (RTU/TCP gateway)** for a
+separate, correctly wired and powered transparent serial-to-TCP gateway.
+Supply the verified IP address and TCP port (502 is the conventional Modbus
+TCP port; gateway ports vary). The protocol still uses the PVCi gauge-1
+read-only pressure register map and has not been physically validated.
+
+**An ASIX AX88772 USB-to-Ethernet adapter is a network card, not an RS232 or
+RS485 converter.** Windows showing its network link as Disconnected means it
+does not detect Ethernet link. The manufacturer documents the RJ45 sockets on
+PVCi/PVCiDuo and PVCuni/PVCduo as RS232/RS485; do not connect those sockets
+to a normal Ethernet port. Software cannot change the electrical pinout.
+
+For saved profiles, TCP endpoints are stored as tcp://HOST:PORT or
+rtu+tcp://HOST:PORT and no COM-port remapping is required. The optional
+network paths do not enable gauge emission or alter high-voltage settings.
+
 ## TDK-Lambda power supplies
 
 TDK serial wiring and commands vary substantially across products. **Check the exact model number, serial port configuration, physical pinout and rated voltage/current before connecting.** A voltage/current display or RJ-style connector does not by itself identify the protocol. UHV Sentinel has separate read-only polling and explicit, confirmation-gated remote controls for legacy **Genesys** and **Z+ in SCPI mode**; it does **not** support every TDK-Lambda unit or power-supply interface. Remote controls always begin locked after connecting or loading a profile. Consult [TDK-Lambda connection guide](TDK_LAMBDA_GUIDE.md).

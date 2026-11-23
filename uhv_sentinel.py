@@ -41,6 +41,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 from impac_pyrometer import Impac140, BAUDS as IMPAC_BAUDS, T90, CLEAR, OPTIONAL_SETTINGS
 from vacuum_extra_devices import Agilent4UHVDevice, EpimaxPVCDevice, ExtendedStatus
+from epimax_network import EpimaxTCPDevice, make_endpoint
 from app_paths import config_path, data_dir, install_dir, runtime_python
 from version import __version__
 import updater
@@ -3697,15 +3698,23 @@ class Agilent4UHVPanel(PfeifferDualGaugePanel):
         return "Pressure available" if code == 0 else "Not available"
 
 
+def device_type_is_epimax_network(entry):
+    return (entry.get("device_type") == EPIMAX_DEVICE_TYPE and
+            str(entry.get("port", "")).startswith(("tcp://", "rtu+tcp://")))
+
+
 class EpimaxPVCPanel(PfeifferDualGaugePanel):
-    """PVCi gauge 1 only; RJ45 serial Modbus RTU, not Ethernet TCP/IP."""
+    """PVCi gauge 1; serial by default, optional verified network endpoint."""
     device_type = EPIMAX_DEVICE_TYPE
     gauge_keys = ["Ion gauge 1"]
     panel_heading = "EpiMax PVCi ion-gauge pressure"
 
     def make_device(self, port, baudrate, saved_state):
-        return EpimaxPVCDevice(port, baudrate, address=int(saved_state.get("address", 1)),
-                               pressure_units=saved_state.get("pressure_units", "mBar"))
+        arguments = dict(address=int(saved_state.get("address", 1)),
+                         pressure_units=saved_state.get("pressure_units", "mBar"))
+        if port.startswith(("tcp://", "rtu+tcp://")):
+            return EpimaxTCPDevice(port, **arguments)
+        return EpimaxPVCDevice(port, baudrate, **arguments)
 
     def gauge_status_label(self, code):
         return "Pressure available" if code == 0 else "Not available"
@@ -4407,6 +4416,9 @@ class UHVSentinelApp(tk.Tk):
         self.pyro_address_var = tk.StringVar(value="00")
         self.epimax_address_var = tk.StringVar(value="1")
         self.epimax_units_var = tk.StringVar(value="mBar")
+        self.epimax_transport_var = tk.StringVar(value="Serial (RJ45 RS232/RS485)")
+        self.epimax_host_var = tk.StringVar(value="")
+        self.epimax_tcp_port_var = tk.StringVar(value="502")
         self.tdk_protocol_var = tk.StringVar(value="Genesys (legacy GEN RS232)")
         self.tdk_address_var = tk.StringVar(value="6")
         self.layout_columns_var = tk.IntVar(value=2)
@@ -4482,6 +4494,23 @@ class UHVSentinelApp(tk.Tk):
                                                values=["mBar", "Torr", "Pa"], width=6,
                                                state="readonly")
         self.epimax_units_label = ttk.Label(actions, text="Gauge units (match display)")
+        self.epimax_network_bar = ttk.Frame(toolbar)
+        self.epimax_network_bar.grid(row=2, column=0, columnspan=9, sticky="ew", pady=(4, 0))
+        ttk.Label(self.epimax_network_bar, text="EpiMax connection:").pack(side="left", padx=(0, 4))
+        self.epimax_transport_combo = ttk.Combobox(
+            self.epimax_network_bar, textvariable=self.epimax_transport_var,
+            values=["Serial (RJ45 RS232/RS485)", "Ethernet (Modbus TCP)",
+                    "Ethernet (RTU/TCP gateway)"], state="readonly", width=29)
+        self.epimax_transport_combo.pack(side="left", padx=(0, 10))
+        self.epimax_transport_combo.bind("<<ComboboxSelected>>", self.on_epimax_transport_changed)
+        ttk.Label(self.epimax_network_bar, text="Host/IP:").pack(side="left", padx=(0, 4))
+        self.epimax_host_entry = ttk.Entry(self.epimax_network_bar, textvariable=self.epimax_host_var, width=22)
+        self.epimax_host_entry.pack(side="left", padx=(0, 8))
+        ttk.Label(self.epimax_network_bar, text="TCP port:").pack(side="left", padx=(0, 4))
+        self.epimax_tcp_entry = ttk.Entry(self.epimax_network_bar, textvariable=self.epimax_tcp_port_var, width=7)
+        self.epimax_tcp_entry.pack(side="left", padx=(0, 8))
+        ttk.Label(self.epimax_network_bar, text="Network mode requires real Ethernet or a serial gateway.").pack(side="left")
+        self.epimax_network_bar.grid_remove()
         self.tdk_protocol_label = ttk.Label(actions, text="TDK series")
         self.tdk_protocol_combo = ttk.Combobox(actions, textvariable=self.tdk_protocol_var,
              values=["Genesys (legacy GEN RS232)", "Z+ (SCPI RS232 / USB-serial)"], width=28, state="readonly")
@@ -4502,7 +4531,7 @@ class UHVSentinelApp(tk.Tk):
         ttk.Button(layout_bar, text="↑", width=3, command=lambda: self.move_selected_panel(-1)).pack(side="left",padx=3)
         ttk.Button(layout_bar, text="↓", width=3, command=lambda: self.move_selected_panel(1)).pack(side="left",padx=3)
 
-        ttk.Label(toolbar, textvariable=self.alert_banner_var, wraplength=900, justify="left", style="Banner.TLabel").grid(row=2, column=0, columnspan=9, sticky="ew", pady=(8, 0))
+        ttk.Label(toolbar, textvariable=self.alert_banner_var, wraplength=900, justify="left", style="Banner.TLabel").grid(row=4, column=0, columnspan=9, sticky="ew", pady=(8, 0))
 
         self.scroller = ScrollableFrame(self)
         self.scroller.grid(row=1, column=0, sticky="nsew")
@@ -4614,8 +4643,25 @@ class UHVSentinelApp(tk.Tk):
         render_markdown_help(text_widget, readme_text)
         text_widget.configure(state="disabled")
 
+    def on_epimax_transport_changed(self, _event=None):
+        mode = self.epimax_transport_var.get()
+        network = mode.startswith("Ethernet")
+        self.epimax_host_entry.configure(state="normal" if network else "disabled")
+        self.epimax_tcp_entry.configure(state="normal" if network else "disabled")
+        self.port_combo.configure(state="disabled" if network else "normal")
+        self.baud_combo.configure(state="disabled" if network else "readonly")
+        if mode == "Ethernet (Modbus TCP)" and not self.epimax_tcp_port_var.get().strip():
+            self.epimax_tcp_port_var.set("502")
+
     def on_device_type_changed(self, _event=None):
         device_type = self.device_type_var.get()
+        if device_type == EPIMAX_DEVICE_TYPE:
+            self.epimax_network_bar.grid()
+            self.on_epimax_transport_changed()
+        else:
+            self.epimax_network_bar.grid_remove()
+            self.port_combo.configure(state="normal")
+            self.baud_combo.configure(state="readonly")
         for widget in (self.pyro_addr_entry, self.pyro_addr_label,
                        self.epimax_addr_entry, self.epimax_addr_label,
                        self.epimax_units_combo, self.epimax_units_label,
@@ -4665,16 +4711,26 @@ class UHVSentinelApp(tk.Tk):
             self.port_var.set(ports[0])
 
     def add_selected_controller(self):
-        port = self.port_var.get().strip()
+        device_type = self.device_type_var.get()
+        network_epimax = device_type == EPIMAX_DEVICE_TYPE and self.epimax_transport_var.get().startswith("Ethernet")
+        if network_epimax:
+            mode = ("modbus_tcp" if self.epimax_transport_var.get() == "Ethernet (Modbus TCP)"
+                    else "rtu_tcp_bridge")
+            try:
+                port = make_endpoint(self.epimax_host_var.get(), self.epimax_tcp_port_var.get(), mode)
+            except ValueError as exc:
+                messagebox.showerror("Invalid EpiMax network address", str(exc))
+                return
+        else:
+            port = self.port_var.get().strip()
         if not port:
-            messagebox.showerror("No serial port", "Select a serial port first.")
+            messagebox.showerror("No port", "Select a serial port or configure a supported TCP endpoint.")
             return
         if any(panel.port == port for panel in self.panels):
             messagebox.showerror("Already added", f"{port} already has a panel.")
             return
         name = self.name_var.get().strip() or port
         saved_state = dict(self._loaded_controller_state.get(port, {}))
-        device_type = self.device_type_var.get()
         if device_type == IMPAC_DEVICE_TYPE:
             try:
                 address = int(self.pyro_address_var.get().strip())
@@ -5401,7 +5457,7 @@ class UHVSentinelApp(tk.Tk):
                 if not port:
                     continue
                 self._loaded_controller_state[port] = item.get("state", {}) or {}
-                if port not in available:
+                if port not in available and not device_type_is_epimax_network(item):
                     self._offline_controllers.append(item)
                     continue
                 if any(p.port == port for p in self.panels):
@@ -5491,7 +5547,8 @@ class UHVSentinelApp(tk.Tk):
                 payload=profiles.load_profile(path)
                 config=payload["config"]
                 available=set(self.port_combo["values"])
-                missing=[entry for entry in config["controllers"] if entry["port"] not in available]
+                missing=[entry for entry in config["controllers"]
+                         if entry["port"] not in available and not device_type_is_epimax_network(entry)]
                 if missing:
                     # Preserve missing devices and allow manual remapping when
                     # imported on a different computer (COM5 -> /dev/ttyUSB0).

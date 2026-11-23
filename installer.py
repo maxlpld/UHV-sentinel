@@ -16,7 +16,7 @@ from app_paths import APP_SLUG, PRODUCT_NAME, data_dir, install_dir, runtime_pyt
 from version import __version__
 
 APP_FILES = (
-    'uhv_sentinel.py', 'vacuum_extra_devices.py', 'impac_pyrometer.py', 'tdk_lambda.py', 'tdk_logging.py', 'tdk_panel.py', 'profiles.py',
+    'uhv_sentinel.py', 'vacuum_extra_devices.py', 'epimax_network.py', 'impac_pyrometer.py', 'tdk_lambda.py', 'tdk_logging.py', 'tdk_panel.py', 'profiles.py',
     'updater.py', 'app_paths.py', 'version.py', 'release_config.json',
     'requirements.txt', 'README.md', 'Unibasel_theme.json',
     'example_theme.json', 'LICENSE', 'CHANGELOG.md', 'installer.py',
