@@ -1,0 +1,11 @@
+{$UHV_SERVER_NAME}:8443 {
+    tls internal
+    encode gzip
+    header {
+        Strict-Transport-Security "max-age=86400"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+    }
+    reverse_proxy monitor:8765
+}

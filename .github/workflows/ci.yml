@@ -21,3 +21,12 @@ jobs:
       - run: python -m compileall -q .
       - run: python -m unittest discover -s tests -v
       - run: python scripts/build_release.py
+
+      - name: Build headless Docker image
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        run: docker build -f Dockerfile.server -t uhv-sentinel-server-ci .
+      - name: Validate server Compose config
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        run: |
+          printf 'UHV_BIND_IP=127.0.0.1\nUHV_SERVER_NAME=127.0.0.1\nUHV_UID=1000\nUHV_GID=1000\nUHV_SERIAL_GID=20\n' > .env.server
+          docker compose --env-file .env.server -f compose.server.yml config --quiet

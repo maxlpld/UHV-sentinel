@@ -29,11 +29,11 @@ jobs:
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Refreshing existing release assets after a CI fix."
-            gh release upload "$TAG" dist/uhv-sentinel-release.zip dist/SHA256SUMS.txt --clobber
+            gh release upload "$TAG" dist/uhv-sentinel-release.zip dist/uhv-sentinel-server-release.zip dist/SHA256SUMS.txt --clobber
             exit 0
           fi
           gh release create "$TAG" \
-            dist/uhv-sentinel-release.zip dist/SHA256SUMS.txt \
+            dist/uhv-sentinel-release.zip dist/uhv-sentinel-server-release.zip dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
             --title "UHV Sentinel $TAG" \
-            --notes "v0.0.3: Agilent pressure-first polling, staggered diagnostics, bounded retries and serial recovery. More reliable update messages and a GitHub Releases fallback. Profiles and recordings are preserved. Real hardware validation remains necessary."
+            --notes "v0.0.4: Ubuntu Server Docker edition with private local HTTPS, separate lab-system URLs, profiles and read-only monitoring. Original desktop edition retained. Hardware requires local verification."

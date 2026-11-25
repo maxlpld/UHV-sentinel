@@ -1,3 +1,11 @@
+## v0.0.4 — Ubuntu Server / Docker LAN edition (2026-11-25)
+
+- Headless Docker service for existing drivers (read-only acquisition).
+- Password-protected local HTTPS dashboard and independent lab-system URLs.
+- Browser instrument assignment, private per-system history, profiles and layout.
+- Explicit non-wildcard host-IP binding, no privileged Docker mode, and mapped USB serial ports.
+- Standalone server release ZIP, setup/update/uninstall docs and automated tests.
+
 ## v0.0.3 — reliability fixes (2026-11-23)
 
 - Read Agilent pressure before optional diagnostic windows; stagger optional requests.

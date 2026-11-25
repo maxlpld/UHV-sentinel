@@ -1,2 +1,2 @@
-"""Application version; increment before publishing each GitHub release."""
-__version__ = "0.0.3"
+"""UHV Sentinel desktop and server release version."""
+__version__ = "0.0.4"
