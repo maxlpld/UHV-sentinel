@@ -4,6 +4,7 @@ No instrument-changing commands are available through the server API.
 """
 from __future__ import annotations
 import ipaddress
+from contextlib import contextmanager
 import json
 import math
 import re
@@ -151,13 +152,18 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_readings_system ON readings(system_slug,ts);
                 CREATE INDEX IF NOT EXISTS idx_readings_device ON readings(device_id,ts);
             ''')
+    @contextmanager
     def connect(self):
         db=sqlite3.connect(str(self.path),timeout=8)
-        db.row_factory=sqlite3.Row
-        db.execute('PRAGMA foreign_keys=ON')
-        db.execute('PRAGMA busy_timeout=8000')
-        db.execute('PRAGMA journal_mode=WAL')
-        return db
+        try:
+            db.row_factory=sqlite3.Row
+            db.execute('PRAGMA foreign_keys=ON')
+            db.execute('PRAGMA busy_timeout=8000')
+            db.execute('PRAGMA journal_mode=WAL')
+            with db:
+                yield db
+        finally:
+            db.close()
     def systems(self):
         with self.lock, self.connect() as db:
             return [{'slug':r['slug'],'name':r['name'],'layout':json.loads(r['layout'])}
