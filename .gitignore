@@ -1,0 +1,7 @@
+# Local Ubuntu Server secrets, recordings and build output
+.env.server
+server-data/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/

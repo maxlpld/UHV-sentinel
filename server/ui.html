@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UHV Sentinel — Laboratory systems</title><link rel="stylesheet" href="/ui.css">
+<script src="/ui.js" defer></script>
+</head>
+<body>
+<div id="login" class="login"><div class="login-card"><div class="eyebrow">UHV SENTINEL</div><h1>Laboratory monitoring</h1><p>Private, headless instrument monitoring for your local laboratory network.</p><form id="login-form"><label for="password">Administrator password</label><input id="password" type="password" autocomplete="current-password" required><button class="primary">Sign in</button></form><p id="login-error" class="error" role="alert"></p></div></div>
+<div id="application" hidden>
+<header><div class="brand"><span class="brand-mark">◇</span><div><b>UHV Sentinel</b><small>Ubuntu Server · Local monitoring</small></div></div><div class="header-actions"><span class="read-only">INSTRUMENTS READ-ONLY</span><button id="logout" class="secondary">Log out</button></div></header>
+<div class="shell"><aside><div class="aside-top"><h2>Laboratory systems</h2><button id="create-system" title="Create another independent system">+ New</button></div><div id="system-nav" class="system-nav"></div><p class="aside-note">Each system has its own link, device configuration and historical measurements.</p></aside>
+<main><div id="overview" class="welcome"><div class="eyebrow">DASHBOARD</div><h1>Your laboratory systems</h1><p>Select a system from the sidebar, or create one to start monitoring.</p><div id="overview-systems"></div></div>
+<div id="system-view" hidden><div class="page-head"><div><div class="eyebrow">SYSTEM DASHBOARD</div><h1 id="system-title"></h1><p id="system-url"></p></div><div class="actions"><button id="copy-link" class="secondary">Copy link</button><button id="export-profile" class="secondary">Export profile</button><button id="import-profile" class="secondary">Import profile</button><input id="profile-file" type="file" accept=".json,application/json" hidden><button id="add-device" class="primary">+ Instrument</button></div></div><div class="toolbar"><label>History <select id="history-range"><option value="1">1 hour</option><option value="24" selected>24 hours</option><option value="48">48 hours</option><option value="168">7 days</option></select></label><label>Columns <select id="columns"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></label><span id="updated-time" class="muted"></span></div><div id="device-grid" class="device-grid"></div><div id="empty-devices" hidden class="empty">No instruments yet. Add a Pfeiffer, Agilent, EpiMax, TDK, IMPAC or NGC3 device.</div></div>
+</main></div></div>
+<dialog id="modal"><form id="modal-form"><h2 id="modal-title"></h2><p id="modal-help" class="muted"></p><div id="modal-fields"></div><p id="modal-error" class="error" role="alert"></p><div class="modal-actions"><button type="button" id="modal-cancel" class="secondary">Cancel</button><button class="primary" id="modal-save" type="submit">Save</button></div></form></dialog>
+</body></html>

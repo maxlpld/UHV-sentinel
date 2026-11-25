@@ -1,0 +1,51 @@
+name: uhv-sentinel-server
+services:
+  monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    user: "${UHV_UID:?Run scripts/server_setup.py}:${UHV_GID:?Run scripts/server_setup.py}"
+    group_add:
+      - "${UHV_SERIAL_GID:-20}"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      UHV_DATA_DIR: /data
+      UHV_ADMIN_PASSWORD_FILE: /run/uhv-secrets/admin_password
+      UHV_SESSION_SECRET_FILE: /run/uhv-secrets/session_key
+      UHV_RETENTION_DAYS: "${UHV_RETENTION_DAYS:-365}"
+    volumes:
+      - ./server-data/records:/data
+      - ./server-data/secrets:/run/uhv-secrets:ro
+    # Map *only* the USB serial nodes used by your lab. Examples:
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    #   - /dev/ttyUSB1:/dev/ttyUSB1
+    # Device paths must exist on the host before docker compose up.
+    expose: ["8765"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8765/health',timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  gateway:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on: [monitor]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      UHV_SERVER_NAME: "${UHV_SERVER_NAME:?Set Ubuntu Server LAN IP in .env.server}"
+    ports:
+      # No wildcard binding: 127.0.0.1 until explicitly changed to a LAN IP.
+      - "${UHV_BIND_IP:?Set a specific IP in .env.server}:8443:8443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./server-data/caddy-data:/data
+      - ./server-data/caddy-config:/config

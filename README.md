@@ -2,9 +2,23 @@
 
 **UHV Sentinel** is a desktop application for laboratory vacuum and power-supply monitoring. Connect compatible serial instruments, graph pressure / temperature / electrical data, retain SQLite recordings, configure alerts, save portable workspaces and access a read-only browser dashboard on a private LAN.
 
-**Current release: v0.0.3** · Python 3.10+ · Windows / Linux / macOS · [MIT license](LICENSE)
+**Current release: v0.0.4** · Python 3.10+ · Windows / Linux / macOS · [MIT license](LICENSE)
 
 > **Lab safety:** UHV Sentinel is an informational monitor, not a certified safety interlock or pressure protection device. Check every new gauge's measured values and units against its front panel before relying on logs or alerts. Do not connect serial cables without checking each model's electrical interface.
+
+## Ubuntu Server / Docker — multiple local laboratory systems (v0.0.4)
+
+UHV Sentinel now offers a **headless Ubuntu Server edition** alongside the original desktop app. Docker runs the instruments continuously; a local Caddy HTTPS proxy gives each laboratory system its own URL, for example `https://SERVER-LAN-IP:8443/s/downstairs-a` and `/s/downstairs-b`. Each system has separate connected hardware, profiles, graphs, and SQLite history. The browser interface is **read-only for physical outputs** (no remote TDK output or ion-gauge emission controls).
+
+Start after installing Docker Engine and Compose on Ubuntu Server:
+
+```bash
+python3 scripts/server_setup.py
+docker compose --env-file .env.server -f compose.server.yml up -d --build
+```
+
+**The initial Docker port is bound only to 127.0.0.1.** Before changing to your university-approved LAN address, arrange campus network restrictions and Docker-aware firewall rules. A university public IPv4 address is not intrinsically private. Clients need to trust the local Caddy certificate authority. USB serial adapters must be mapped individually into the Docker container. Read **[the complete Ubuntu Server/Docker installation, update, uninstall and security guide](docs/UBUNTU_SERVER_DOCKER.md)**. The server has a separate `uhv-sentinel-server-release.zip` GitHub Release asset. The desktop installer remains available and its own updater is unchanged.
+
 
 ## Supported hardware
 
