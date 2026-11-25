@@ -4,7 +4,6 @@ No instrument-changing commands are available through the server API.
 """
 from __future__ import annotations
 import ipaddress
-from contextlib import contextmanager
 import json
 import math
 import re
@@ -14,6 +13,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any
 
 DEVICE_TYPES = {
@@ -151,19 +151,20 @@ class Store:
                   metric TEXT NOT NULL, value REAL NOT NULL, unit TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS idx_readings_system ON readings(system_slug,ts);
                 CREATE INDEX IF NOT EXISTS idx_readings_device ON readings(device_id,ts);
+                CREATE TABLE IF NOT EXISTS chamber_map (
+                  system_slug TEXT PRIMARY KEY REFERENCES systems(slug) ON DELETE CASCADE,
+                  mapping TEXT NOT NULL DEFAULT '{}');
+                CREATE TABLE IF NOT EXISTS hub_shortcuts (
+                  id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, created_at REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS hub_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             ''')
-    @contextmanager
     def connect(self):
         db=sqlite3.connect(str(self.path),timeout=8)
-        try:
-            db.row_factory=sqlite3.Row
-            db.execute('PRAGMA foreign_keys=ON')
-            db.execute('PRAGMA busy_timeout=8000')
-            db.execute('PRAGMA journal_mode=WAL')
-            with db:
-                yield db
-        finally:
-            db.close()
+        db.row_factory=sqlite3.Row
+        db.execute('PRAGMA foreign_keys=ON')
+        db.execute('PRAGMA busy_timeout=8000')
+        db.execute('PRAGMA journal_mode=WAL')
+        return db
     def systems(self):
         with self.lock, self.connect() as db:
             return [{'slug':r['slug'],'name':r['name'],'layout':json.loads(r['layout'])}
@@ -234,12 +235,65 @@ class Store:
             other_ids={r[0] for r in db.execute('SELECT id FROM devices WHERE system_slug!=?',(slug,))}
             id_mapping={ident:(uuid.uuid4().hex[:16] if ident in other_ids else ident) for ident,_ in devices}
             db.execute('DELETE FROM devices WHERE system_slug=?',(slug,))
+            db.execute('DELETE FROM chamber_map WHERE system_slug=?',(slug,))
             now=time.time()
             for ident,cfg in devices:
                 db.execute('INSERT INTO devices VALUES (?,?,?,?)',(id_mapping[ident],slug,json.dumps(cfg),now))
             order=[id_mapping[x] for x in order]
             db.execute('UPDATE systems SET layout=? WHERE slug=?',(json.dumps({'columns':cols,'order':order}),slug))
         # No electrical output states are included in profiles.
+    def get_chambers(self,slug):
+        with self.lock,self.connect() as db:
+            row=db.execute('SELECT mapping FROM chamber_map WHERE system_slug=?',(slug,)).fetchone()
+            return json.loads(row[0]) if row else {}
+    def set_chambers(self,slug,mapping):
+        if not isinstance(mapping,dict) or set(mapping)-{'p','a'}:raise ValueError('Invalid chamber mapping')
+        devices={d['id'] for d in self.devices(slug)}
+        normalized={}
+        for key in ('p','a'):
+            selection=mapping.get(key)
+            if not selection:continue
+            if not isinstance(selection,dict):raise ValueError('Invalid chamber selection')
+            device_id=selection.get('device_id');metric=selection.get('metric')
+            if device_id not in devices or not isinstance(metric,str) or not 1<=len(metric)<=70 or any(ord(c)<32 for c in metric):
+                raise ValueError('Choose a pressure channel on an instrument in this system')
+            normalized[key]={'device_id':device_id,'metric':metric}
+        with self.lock,self.connect() as db:
+            if not db.execute('SELECT 1 FROM systems WHERE slug=?',(slug,)).fetchone():raise KeyError('Unknown system')
+            db.execute('INSERT OR REPLACE INTO chamber_map VALUES (?,?)',(slug,json.dumps(normalized)))
+        return normalized
+    def shortcuts(self):
+        with self.lock,self.connect() as db:
+            return [dict(r) for r in db.execute('SELECT id,title,url FROM hub_shortcuts ORDER BY created_at')]
+    def add_shortcut(self,title,url):
+        title=str(title).strip();url=str(url).strip()
+        if not 1<=len(title)<=60 or not 1<=len(url)<=500:raise ValueError('Invalid shortcut name or URL')
+        if url.startswith('/s/'):
+            if not SLUG.fullmatch(url[3:]) or not self.system(url[3:]):
+                raise ValueError('Internal shortcut must link to an existing system')
+        else:
+            parsed=urlsplit(url)
+            if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or any(ord(c)<32 for c in url) or parsed.fragment:
+                raise ValueError('Use a complete http(s) URL without credentials or fragments')
+            # Link only. The server will never fetch external URLs.
+        identifier=uuid.uuid4().hex[:12]
+        with self.lock,self.connect() as db:
+            db.execute('INSERT INTO hub_shortcuts VALUES (?,?,?,?)',(identifier,title,url,time.time()))
+        return identifier
+    def delete_shortcut(self,identifier):
+        with self.lock,self.connect() as db:
+            if db.execute('DELETE FROM hub_shortcuts WHERE id=?',(identifier,)).rowcount!=1:
+                raise KeyError('Shortcut not found')
+    def get_hub_title(self):
+        with self.lock,self.connect() as db:
+            row=db.execute("SELECT value FROM hub_settings WHERE key='title'").fetchone()
+        return row[0] if row else 'UHV Sentinel Hub'
+    def set_hub_title(self,title):
+        title=str(title).strip()
+        if not 1<=len(title)<=72 or any(ord(c)<32 for c in title):raise ValueError('Invalid hub title')
+        with self.lock,self.connect() as db:
+            db.execute("INSERT OR REPLACE INTO hub_settings VALUES ('title',?)",(title,))
+
     def record(self,slug,device_id,ts,metrics):
         with self.lock,self.connect() as db:
             db.executemany('INSERT INTO readings VALUES (?,?,?,?,?,?)',

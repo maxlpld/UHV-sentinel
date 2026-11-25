@@ -22,6 +22,7 @@ services:
     volumes:
       - ./server-data/records:/data
       - ./server-data/secrets:/run/uhv-secrets:ro
+    # Explicit device mappings belong in compose.devices.yml, created by installer.
     # Map *only* the USB serial nodes used by your lab. Examples:
     # devices:
     #   - /dev/ttyUSB0:/dev/ttyUSB0

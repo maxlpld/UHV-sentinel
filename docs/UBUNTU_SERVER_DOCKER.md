@@ -1,3 +1,5 @@
+**For a one-command installation, see [HUB_QUICKSTART.md](HUB_QUICKSTART.md).** The existing detailed manual below describes advanced setup. The Hub now provides centralized updates; do not use the old manual overwrite procedure for the hub deployment.
+
 # Ubuntu Server / Docker — UHV Sentinel LAN Edition
 
 UHV Sentinel's **headless Docker edition** runs independently of the Windows/Linux/macOS desktop GUI. It stores separate systems and SQLite history on Ubuntu Server and serves a **read-only instrument dashboard** on your LAN using local HTTPS. It does **not** provide remote HV, ion-gauge emission or TDK output controls. Keep the physical controllers' protective interlocks enabled.

@@ -1,2 +1,2 @@
-"""UHV Sentinel desktop and server release version."""
-__version__ = "0.0.4"
+"""UHV Sentinel release version."""
+__version__ = "0.0.5"

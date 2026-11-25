@@ -22,21 +22,21 @@ $('login-form').addEventListener('submit',async event=>{
  }catch(err){$('login-error').textContent=err.message}
 });
 $('logout').addEventListener('click',async()=>{try{await api('logout','POST',{})}catch{}showLogin()});
-async function refreshSystems(){state.systems=await api('systems');drawSystems()}
+async function refreshSystems(){state.systems=await api('systems');drawSystems();if(typeof refreshHub==='function')await refreshHub()}
 function drawSystems(){
- const nav=$('system-nav');removeChildren(nav);const overview=$('overview-systems');removeChildren(overview);
+ const nav=$('system-nav');removeChildren(nav);
  for(const s of state.systems){
   const n=el('button','system-item'+(state.current===s.slug?' active':''),s.name);n.addEventListener('click',()=>openSystem(s.slug));nav.append(n);
-  const a=el('a','system-link',s.name+' · '+s.devices+' instrument(s)');a.href='/s/'+s.slug;a.addEventListener('click',e=>{e.preventDefault();openSystem(s.slug)});overview.append(a)
+
  }
 }
 async function openSystem(slug,push=true){
  if(!state.systems.some(s=>s.slug===slug))return;
  state.current=slug;state.lastHistory=0;state.history=[];
  if(push)history.pushState({},'', '/s/'+slug);
- $('overview').hidden=true;$('system-view').hidden=false;drawSystems();await refreshSystem(true)
+ $('overview').hidden=true;$('hub-settings-view').hidden=true;$('system-view').hidden=false;drawSystems();await refreshSystem(true)
 }
-window.addEventListener('popstate',()=>{const m=location.pathname.match(/^\/s\/([a-z0-9-]+)$/);if(m)openSystem(m[1],false);else{state.current=null;$('system-view').hidden=true;$('overview').hidden=false;drawSystems()}});
+window.addEventListener('popstate',()=>{const m=location.pathname.match(/^\/s\/([a-z0-9-]+)$/);if(m)openSystem(m[1],false);else{state.current=null;$('system-view').hidden=true;$('hub-settings-view').hidden=true;$('overview').hidden=false;drawSystems();if(typeof refreshHub==='function')refreshHub()}});
 async function refreshSystem(loadHistory=false){
  if(!state.current)return;
  try{
@@ -177,6 +177,6 @@ $('profile-file').addEventListener('change',async e=>{
  try{const data=JSON.parse(await file.text());if(!confirm('Import this profile? Current instrument configuration will be replaced; historical data remains.'))return;
  await api('systems/'+state.current+'/profile','POST',data);await refreshSystems();await refreshSystem(true)}catch(err){alert('Profile import failed: '+err.message)}finally{e.target.value=''}
 });
-setInterval(()=>{if(state.current&&state.csrf)refreshSystem(false)},5000);
+setInterval(()=>{if(state.current&&state.csrf)refreshSystem(false);else if(state.csrf&&location.pathname==='/')refreshHub()},5000);
 window.addEventListener('resize',()=>{if(state.current)refreshSystem(false)});
 init();

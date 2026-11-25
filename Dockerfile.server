@@ -2,6 +2,7 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 RUN pip install --no-cache-dir 'pyserial==3.5'
+COPY version.py /app/version.py
 COPY server /app/server
 COPY vacuum_extra_devices.py epimax_network.py tdk_lambda.py impac_pyrometer.py /app/
 EXPOSE 8765

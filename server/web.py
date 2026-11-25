@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
 from server.core import DEVICE_TYPES,Store,Poller
+from server.hub import summarize_systems, host_telemetry, get_release_status, queue_update
 
 COOKIE='uhv_session'
 TTL=8*3600
@@ -113,11 +114,11 @@ class Handler(BaseHTTPRequestHandler):
             raise PermissionError('CSRF token missing or invalid')
     def _serve_static(self,path):
         root=Path(__file__).resolve().parent
-        choices={'/':'ui.html','/ui.js':'ui.js','/ui.css':'ui.css'}
-        if path.startswith('/s/') and len(path.split('/'))==3:path='/'
+        choices={'/':'ui.html','/ui.js':'ui.js','/ui.css':'ui.css','/hub.css':'hub.css','/hub.js':'hub.js'}
+        if (path.startswith('/s/') and len(path.split('/'))==3) or path=='/settings':path='/'
         name=choices.get(path)
         if name is None:return False
-        kind={'ui.html':'text/html; charset=utf-8','ui.js':'text/javascript; charset=utf-8','ui.css':'text/css; charset=utf-8'}[name]
+        kind={'ui.html':'text/html; charset=utf-8','ui.js':'text/javascript; charset=utf-8','ui.css':'text/css; charset=utf-8','hub.css':'text/css; charset=utf-8','hub.js':'text/javascript; charset=utf-8'}[name]
         self._send(200,(root/name).read_bytes(),kind)
         return True
     def do_GET(self):
@@ -132,6 +133,14 @@ class Handler(BaseHTTPRequestHandler):
                 if self._serve_static(path):return
                 return self._fail(401,'Login required')
             bits=self._route()
+            if bits==['api','hub']:
+                data=self.server.store
+                return self._send(200,{'title':data.get_hub_title(),
+                    'host':host_telemetry(data.path.parent),
+                    'systems':summarize_systems(data,self.server.poller),
+                    'shortcuts':data.shortcuts()})
+            if bits==['api','hub','update']:
+                return self._send(200,get_release_status(self.server.store.path.parent))
             if bits==['api','types']:return self._send(200,DEVICE_TYPES)
             if bits==['api','systems']:
                 result=[]
@@ -148,6 +157,8 @@ class Handler(BaseHTTPRequestHandler):
                     q=parse_qs(urlsplit(self.path).query)
                     hours=float(q.get('hours',['24'])[0]);limit=int(q.get('limit',['1500'])[0])
                     return self._send(200,self.server.store.history(slug,hours,limit))
+                if bits[3:]==['chambers']:
+                    return self._send(200,self.server.store.get_chambers(slug))
                 if bits[3:]==['profile']:
                     return self._send(200,self.server.store.export_profile(slug),
                                       headers=[('Content-Disposition',f'attachment; filename="uhv-{slug}-profile.json"')])
@@ -171,6 +182,22 @@ class Handler(BaseHTTPRequestHandler):
                 self._body()  # consume the JSON body before the next keep-alive request
                 return self._send(200,{'ok':True},headers=[('Set-Cookie',
                                   f'{COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0')])
+            if path==['api','hub','settings']:
+                data=self._body();self.server.store.set_hub_title(data.get('title',''))
+                return self._send(200,{'ok':True})
+            if path==['api','hub','update']:
+                self._body()
+                state=get_release_status(self.server.store.path.parent)
+                if not state.get('available'):
+                    raise ValueError('No newer GitHub release available; check update status first')
+                queue_update(self.server.store.path.parent)
+                return self._send(202,{'queued':True,'message':'Host updater will apply the release shortly'})
+            if path==['api','hub','shortcuts']:
+                data=self._body();ident=self.server.store.add_shortcut(data.get('title',''),data.get('url',''))
+                return self._send(201,{'id':ident})
+            if len(path)==4 and path[:3]==['api','hub','shortcuts']:
+                self._body();self.server.store.delete_shortcut(path[3])
+                return self._send(200,{'ok':True})
             if path==['api','systems']:
                 data=self._body();slug=self.server.store.create_system(data.get('name',''),data.get('slug',''))
                 return self._send(201,{'slug':slug,'url':'/s/'+slug})
@@ -180,6 +207,8 @@ class Handler(BaseHTTPRequestHandler):
                 if path[3:]==['devices']:
                     device_id=self.server.store.add_device(slug,self._body())
                     self.server.poller.reconfigure();return self._send(201,{'id':device_id})
+                if path[3:]==['chambers']:
+                    self.server.store.set_chambers(slug,self._body());return self._send(200,{'ok':True})
                 if path[3:]==['layout']:
                     self.server.store.update_layout(slug,self._body());return self._send(200,{'ok':True})
                 if path[3:]==['profile']:

@@ -1,24 +1,38 @@
-# UHV Sentinel
+# UHV Sentinel — Laboratory Hub
+
+**Ubuntu Server / Docker is the recommended deployment.** One always-on server monitors independently configured vacuum systems through a password-protected, local HTTPS dashboard. Start on the hub homepage, view hardware health/storage/uptime/CPU temperature (if detected), and open each system with a dedicated URL.
+
+### Ubuntu Server 24.04 / 26.04 — copy these two commands
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/maxlpld/UHV-sentinel/v0.0.5/INSTALL_UBUNTU_SERVER.sh -o /tmp/uhv-install.sh
+sudo bash /tmp/uhv-install.sh
+```
+
+The script can be reviewed before execution; it installs Docker/Compose if needed, configures a local-only HTTPS dashboard, host monitoring, auto-restart, data storage, and the host-side GitHub updater. It will **never** assign the university IP for you or open the server to the public Internet. You must obtain university IT approval before allowing LAN access.
+
+- **Hub:** `https://SERVER-IP:8443/`
+- **RT-A:** `https://SERVER-IP:8443/s/rt-a`
+- **RT-B:** `https://SERVER-IP:8443/s/rt-b`
+
+The two system pages are created from the hub, and can have independent devices, pressure graphs, history, and profiles. Configure the hub's P-Chamber and A-Chamber tiles by explicitly selecting pressure channels in each system. Add as many other systems or local shortcut buttons as required.
+
+The installer initially binds only `127.0.0.1`. After IT grants LAN-only access, set `UHV_BIND_IP` and `UHV_SERVER_NAME` in `/opt/uhv-sentinel/.env.server` to the approved IP, then run `sudo uhv-sentinel restart`. Get the initial administrator password with `sudo cat /opt/uhv-sentinel/server-data/secrets/admin_password`.
+
+**Updates:** Hub → Main settings → Check for updates → Install latest update. The systemd host service performs the update, keeping the Docker socket out of the web app. The server performs read-only instrument measurements; it never activates TDK output, ion-gauge emission or pump HV remotely.
+
+**[Full Ubuntu Server quickstart](docs/HUB_QUICKSTART.md)** · **[Advanced Docker and LAN configuration](docs/UBUNTU_SERVER_DOCKER.md)**
+
+---
+
+## Legacy desktop edition (Windows / Linux / macOS)
+
 
 **UHV Sentinel** is a desktop application for laboratory vacuum and power-supply monitoring. Connect compatible serial instruments, graph pressure / temperature / electrical data, retain SQLite recordings, configure alerts, save portable workspaces and access a read-only browser dashboard on a private LAN.
 
-**Current release: v0.0.4** · Python 3.10+ · Windows / Linux / macOS · [MIT license](LICENSE)
+**Current release: v0.2.0** · Python 3.10+ · Windows / Linux / macOS · [MIT license](LICENSE)
 
 > **Lab safety:** UHV Sentinel is an informational monitor, not a certified safety interlock or pressure protection device. Check every new gauge's measured values and units against its front panel before relying on logs or alerts. Do not connect serial cables without checking each model's electrical interface.
-
-## Ubuntu Server / Docker — multiple local laboratory systems (v0.0.4)
-
-UHV Sentinel now offers a **headless Ubuntu Server edition** alongside the original desktop app. Docker runs the instruments continuously; a local Caddy HTTPS proxy gives each laboratory system its own URL, for example `https://SERVER-LAN-IP:8443/s/downstairs-a` and `/s/downstairs-b`. Each system has separate connected hardware, profiles, graphs, and SQLite history. The browser interface is **read-only for physical outputs** (no remote TDK output or ion-gauge emission controls).
-
-Start after installing Docker Engine and Compose on Ubuntu Server:
-
-```bash
-python3 scripts/server_setup.py
-docker compose --env-file .env.server -f compose.server.yml up -d --build
-```
-
-**The initial Docker port is bound only to 127.0.0.1.** Before changing to your university-approved LAN address, arrange campus network restrictions and Docker-aware firewall rules. A university public IPv4 address is not intrinsically private. Clients need to trust the local Caddy certificate authority. USB serial adapters must be mapped individually into the Docker container. Read **[the complete Ubuntu Server/Docker installation, update, uninstall and security guide](docs/UBUNTU_SERVER_DOCKER.md)**. The server has a separate `uhv-sentinel-server-release.zip` GitHub Release asset. The desktop installer remains available and its own updater is unchanged.
-
 
 ## Supported hardware
 
@@ -216,23 +230,3 @@ To publish your own project to GitHub and enable working updates, follow **[docs
 - This open-source repository does not redistribute vendor PDF manuals. The GUI offers the vendor links instead.
 
 Refer to [the instrument wiring guide](docs/DEVICE_CONNECTION_GUIDE.md) and the original vendor manuals before connecting any high-voltage or serial controller. See [LICENSE](LICENSE) for source code license.
-
-### Experimental EpiMax TCP transport (v0.0.2)
-
-In Device → EpiMax select Ethernet (Modbus TCP) for verified native TCP-capable
-hardware or Ethernet (RTU/TCP gateway) for a properly wired serial-to-network
-converter. Enter its IP address and TCP port. The documented PVCi, PVCiDuo,
-PVCuni and PVCduo RJ45 communication ports are **serial RS232/RS485**, so
-a USB-to-Ethernet adapter alone cannot connect to them. See
-[device guide](docs/DEVICE_CONNECTION_GUIDE.md) and confirm the exact hardware.
-
-### v0.0.3 — Agilent reliability and updater improvements
-
-- **Agilent pressure priority:** channel pressure windows 812 and 822 are read before optional diagnostics. Only one optional register is queried per cycle; unsupported registers get a five-minute backoff.
-- **Recovery:** each pressure query is retried once. After three full failed pressure sweeps, the serial port is reopened no more frequently than every 12 seconds. These operations never change HV or pump setpoints.
-- **Freshness:** the GUI distinguishes an open serial port from confirmed fresh pressure values and reports partial-channel failures.
-- **Updater:** clearer errors, a GitHub Releases fallback button, and a bounded serial-worker shutdown.
-
-**Version migration:** Earlier standalone archives were v0.2.0, which is semantically higher than the GitHub v0.0.x series. To join the GitHub update series, manually install v0.0.3 once. The installer preserves saved profiles and recorded pressure history. Later versions can use Options → Update.
-
-**Hardware:** These fixes were checked with mock serial responses, not a real Agilent controller. If pressure remains unavailable, inspect the failure counter, reconnect count, controller HV and channel status, and COM/baud settings.

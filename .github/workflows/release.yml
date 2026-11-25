@@ -36,4 +36,4 @@ jobs:
             dist/uhv-sentinel-release.zip dist/uhv-sentinel-server-release.zip dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
             --title "UHV Sentinel $TAG" \
-            --notes "v0.0.4: Ubuntu Server Docker edition with private local HTTPS, separate lab-system URLs, profiles and read-only monitoring. Original desktop edition retained. Hardware requires local verification."
+            --notes "v0.0.5: Ubuntu Server Hub home dashboard, host storage/temperature/uptime, P/A chamber pressure summaries, custom shortcuts, dedicated RT-A / RT-B system URLs, centralized GitHub updates through systemd, and one-command Docker installer. Instrument control remains read-only."

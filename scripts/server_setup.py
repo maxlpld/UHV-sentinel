@@ -35,8 +35,8 @@ def main():
         ENV.write_text(f'''# Use localhost until network access has been approved by university IT.
 UHV_BIND_IP=127.0.0.1
 UHV_SERVER_NAME=127.0.0.1
-UHV_UID={os.getuid()}
-UHV_GID={os.getgid()}
+UHV_UID={int(os.environ.get("UHV_RUNTIME_UID", os.getuid()))}
+UHV_GID={int(os.environ.get("UHV_RUNTIME_GID", os.getgid()))}
 UHV_SERIAL_GID={gid}
 UHV_RETENTION_DAYS=365
 ''',encoding='utf-8')

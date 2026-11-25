@@ -1,0 +1,5 @@
+[Unit]
+Description=Collect UHV Sentinel host server metrics
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/uhv-sentinel/scripts/host_tasks.py stats

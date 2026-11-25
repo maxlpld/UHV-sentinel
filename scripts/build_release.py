@@ -39,13 +39,14 @@ def build(output: Path | None = None) -> tuple[Path, Path]:
     # The Docker build needs only the headless app, instrument modules and documentation.
     server_zip = folder / 'uhv-sentinel-server-release.zip'
     server_files = [
-        'Dockerfile.server', 'compose.server.yml', '.dockerignore',
-        'deploy/Caddyfile', 'scripts/server_setup.py',
+        'Dockerfile.server', 'compose.server.yml', '.dockerignore', 'INSTALL_UBUNTU_SERVER.sh',
+        'deploy/Caddyfile', 'scripts/server_setup.py', 'scripts/host_tasks.py', 'scripts/map_serial.py',
         'docs/UBUNTU_SERVER_DOCKER.md', 'README.md', 'CHANGELOG.md',
         'version.py', 'vacuum_extra_devices.py', 'epimax_network.py',
         'tdk_lambda.py', 'impac_pyrometer.py',
     ]
     server_paths = [ROOT / name for name in server_files]
+    server_paths += sorted(path for path in (ROOT / 'deploy' / 'systemd').rglob('*') if path.is_file())
     server_paths += sorted(path for path in (ROOT / 'server').rglob('*')
                            if path.is_file() and '__pycache__' not in path.parts
                            and path.suffix != '.pyc')

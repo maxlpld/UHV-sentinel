@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh UHV Sentinel server health every 20 seconds
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=20s
+Unit=uhv-sentinel-host.service
+[Install]
+WantedBy=timers.target
