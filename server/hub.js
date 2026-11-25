@@ -114,12 +114,16 @@ $('configure-chambers').addEventListener('click',async()=>{
  const options={'':'Not configured'};
  for(const row of available)options[row.key]=row.label;
  const getCurrent=k=>current[k]?current[k].device_id+'::'+current[k].metric:'';
+ for(const k of ['p','a'])if(getCurrent(k) && !options[getCurrent(k)])
+  options[getCurrent(k)]='Saved pressure mapping (currently offline)';
  modal('Home hub pressure indicators','Select a currently reporting pressure channel for P-Chamber and A-Chamber. Missing values remain marked unavailable.',[
   {key:'p',label:'P-Chamber',options,value:getCurrent('p'),required:false},
   {key:'a',label:'A-Chamber',options,value:getCurrent('a'),required:false}],async data=>{
    const mapping={};for(const k of ['p','a'])if(data[k]){
-    const choice=available.find(x=>x.key===data[k]);if(!choice)throw Error('Pressure channel unavailable');
-    mapping[k]={device_id:choice.device_id,metric:choice.metric};
+    const choice=available.find(x=>x.key===data[k]);
+    if(choice)mapping[k]={device_id:choice.device_id,metric:choice.metric};
+    else if(data[k]===getCurrent(k))mapping[k]=current[k];
+    else throw Error('Pressure channel unavailable');
    }
    await api('systems/'+slug+'/chambers','POST',mapping);await refreshHub();
   });

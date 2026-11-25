@@ -31,6 +31,15 @@ class HubTests(unittest.TestCase):
         self.poller.live[self.a]['state']='stale'
         self.assertIsNone(summarize_systems(self.store,self.poller)[0]['chambers']['p']['value'])
         with self.assertRaises(ValueError):self.store.set_chambers('rt-b',{'p':{'device_id':self.a,'metric':'P1'}})
+    def test_profile_restores_home_pressure_mappings(self):
+        self.store.set_chambers('rt-a',{'p':{'device_id':self.a,'metric':'P1'}})
+        profile=self.store.export_profile('rt-a')
+        self.assertEqual(profile['chambers']['p']['metric'],'P1')
+        self.store.import_profile('rt-a',profile)
+        mapping=self.store.get_chambers('rt-a')
+        self.assertEqual(mapping['p']['device_id'],self.store.devices('rt-a')[0]['id'])
+        self.assertEqual(mapping['p']['metric'],'P1')
+
     def test_custom_shortcuts_validation_and_persistence(self):
         key=self.store.add_shortcut('RT-C','/s/rt-b')
         self.store.add_shortcut('Lab tool','https://192.168.0.15:9443/')
@@ -61,11 +70,11 @@ class HubTests(unittest.TestCase):
         class MockResponse:
             def __enter__(self):return self
             def __exit__(self,*args):return False
-            def read(self,n):return b'{"tag_name": "v0.0.6"}'
+            def read(self,n):return b'{"tag_name": "v0.0.7"}'
         with patch('server.hub.urllib.request.urlopen', return_value=MockResponse()):
             hub._cache['at']=0
             result=get_release_status(self.store.path.parent)
-        self.assertEqual(result['latest'],'v0.0.6')
+        self.assertEqual(result['latest'],'v0.0.7')
         self.assertTrue(result['available'])
         self.assertFalse((self.store.path.parent/'update-request.json').exists())
 

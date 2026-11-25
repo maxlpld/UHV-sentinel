@@ -11,6 +11,7 @@ import sqlite3
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -158,13 +159,20 @@ class Store:
                   id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, created_at REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS hub_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             ''')
+    @contextmanager
     def connect(self):
+        # sqlite3.Connection.__exit__ commits but does NOT close: explicitly close
+        # on every platform (especially important for Windows CI and backups).
         db=sqlite3.connect(str(self.path),timeout=8)
-        db.row_factory=sqlite3.Row
-        db.execute('PRAGMA foreign_keys=ON')
-        db.execute('PRAGMA busy_timeout=8000')
-        db.execute('PRAGMA journal_mode=WAL')
-        return db
+        try:
+            db.row_factory=sqlite3.Row
+            db.execute('PRAGMA foreign_keys=ON')
+            db.execute('PRAGMA busy_timeout=8000')
+            db.execute('PRAGMA journal_mode=WAL')
+            with db:
+                yield db
+        finally:
+            db.close()
     def systems(self):
         with self.lock, self.connect() as db:
             return [{'slug':r['slug'],'name':r['name'],'layout':json.loads(r['layout'])}
@@ -211,7 +219,8 @@ class Store:
         sys=self.system(slug)
         if not sys:raise KeyError('System not found')
         return {'format':'uhv-sentinel-server-profile','version':1,'name':sys['name'],
-                'layout':sys['layout'],'devices':[{k:v for k,v in d.items() if k!='system'} for d in self.devices(slug)]}
+                'layout':sys['layout'],'chambers':self.get_chambers(slug),
+                'devices':[{k:v for k,v in d.items() if k!='system'} for d in self.devices(slug)]}
     def import_profile(self,slug,data):
         if not isinstance(data,dict) or data.get('format')!='uhv-sentinel-server-profile' or data.get('version')!=1:
             raise ValueError('Invalid server profile file')
@@ -228,6 +237,12 @@ class Store:
             raise ValueError('Invalid profile panel order')
         keys=[endpoint_key(x[1]) for x in devices]
         if len(set(keys))!=len(keys):raise ValueError('Repeated hardware ports in profile')
+        chambers=data.get('chambers',{})
+        if not isinstance(chambers,dict) or set(chambers)-{'p','a'}:
+            raise ValueError('Invalid chamber mapping in profile')
+        for selection in chambers.values():
+            if not isinstance(selection,dict) or selection.get('device_id') not in ids or not isinstance(selection.get('metric'),str) or not 1<=len(selection['metric'])<=70:
+                raise ValueError('Profile chamber mapping references an unknown device/channel')
         with self.lock,self.connect() as db:
             if not db.execute('SELECT 1 FROM systems WHERE slug=?',(slug,)).fetchone():raise KeyError('System not found')
             occupied={endpoint_key(json.loads(row[0])) for row in db.execute('SELECT config FROM devices WHERE system_slug!=?',(slug,))}
@@ -241,6 +256,9 @@ class Store:
                 db.execute('INSERT INTO devices VALUES (?,?,?,?)',(id_mapping[ident],slug,json.dumps(cfg),now))
             order=[id_mapping[x] for x in order]
             db.execute('UPDATE systems SET layout=? WHERE slug=?',(json.dumps({'columns':cols,'order':order}),slug))
+            mapped_chambers={key:{'device_id':id_mapping[selection['device_id']], 'metric':selection['metric']}
+                             for key,selection in chambers.items()}
+            db.execute('INSERT OR REPLACE INTO chamber_map VALUES (?,?)',(slug,json.dumps(mapped_chambers)))
         # No electrical output states are included in profiles.
     def get_chambers(self,slug):
         with self.lock,self.connect() as db:

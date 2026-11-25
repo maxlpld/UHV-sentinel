@@ -5,7 +5,7 @@
 ### Ubuntu Server 24.04 / 26.04 — copy these two commands
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/maxlpld/UHV-sentinel/v0.0.5/INSTALL_UBUNTU_SERVER.sh -o /tmp/uhv-install.sh
+curl -fsSL https://raw.githubusercontent.com/maxlpld/UHV-sentinel/v0.0.6/INSTALL_UBUNTU_SERVER.sh -o /tmp/uhv-install.sh
 sudo bash /tmp/uhv-install.sh
 ```
 

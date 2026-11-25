@@ -36,4 +36,4 @@ jobs:
             dist/uhv-sentinel-release.zip dist/uhv-sentinel-server-release.zip dist/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
             --title "UHV Sentinel $TAG" \
-            --notes "v0.0.5: Ubuntu Server Hub home dashboard, host storage/temperature/uptime, P/A chamber pressure summaries, custom shortcuts, dedicated RT-A / RT-B system URLs, centralized GitHub updates through systemd, and one-command Docker installer. Instrument control remains read-only."
+            --notes "v0.0.6: Hub stabilization: explicitly closed SQLite connections on Windows and Linux, portable chamber assignments in profiles, offline mapping retention, and pinned Ubuntu install source. Includes all v0.0.5 Hub features."

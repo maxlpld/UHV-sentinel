@@ -1,3 +1,10 @@
+## v0.0.6 — Hub stabilization (2026-11-25)
+
+- Close SQLite connections explicitly across Windows and Linux, avoiding locked databases.
+- Include P-Chamber / A-Chamber mappings in exported profiles, including after ID remapping on import.
+- Preserve mappings while a gauge is temporarily offline in the browser.
+- Ubuntu installer now pins the v0.0.6 tagged source release.
+
 ## v0.0.5 — UHV Sentinel Hub (2026-11-25)
 
 - Ubuntu Server hub homepage with hardware health (host metrics), software update status, custom shortcuts and dedicated systems.

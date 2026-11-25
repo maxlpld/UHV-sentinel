@@ -4,7 +4,7 @@ set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 BASE=/opt/uhv-sentinel
 REPO=https://github.com/maxlpld/UHV-sentinel.git
-TAG=${UHV_VERSION:-v0.0.5}
+TAG=${UHV_VERSION:-v0.0.6}
 if [[ $EUID -ne 0 ]]; then echo 'Run: sudo bash INSTALL_UBUNTU_SERVER.sh'; exit 1; fi
 source /etc/os-release
 if [[ ${ID:-} != ubuntu ]]; then echo 'Ubuntu Server required.' >&2; exit 1; fi
