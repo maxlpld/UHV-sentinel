@@ -4,7 +4,7 @@ set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 BASE=/opt/uhv-sentinel
 REPO=https://github.com/maxlpld/UHV-sentinel.git
-TAG=${UHV_VERSION:-v0.0.6}
+TAG=${UHV_VERSION:-v0.0.7}
 if [[ $EUID -ne 0 ]]; then echo 'Run: sudo bash INSTALL_UBUNTU_SERVER.sh'; exit 1; fi
 source /etc/os-release
 if [[ ${ID:-} != ubuntu ]]; then echo 'Ubuntu Server required.' >&2; exit 1; fi
@@ -60,6 +60,10 @@ install -m 0644 deploy/systemd/uhv-sentinel-host.service /etc/systemd/system/
 install -m 0644 deploy/systemd/uhv-sentinel-host.timer /etc/systemd/system/
 install -m 0644 deploy/systemd/uhv-sentinel-update.service /etc/systemd/system/
 install -m 0644 deploy/systemd/uhv-sentinel-update.path /etc/systemd/system/
+install -m 0644 deploy/systemd/uhv-sentinel-maintenance.service /etc/systemd/system/
+install -m 0644 deploy/systemd/uhv-sentinel-maintenance.path /etc/systemd/system/
+install -m 0644 deploy/systemd/uhv-sentinel-reboot.service /etc/systemd/system/
+install -m 0644 deploy/systemd/uhv-sentinel-reboot.path /etc/systemd/system/
 cat >/usr/local/sbin/uhv-sentinel <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -71,12 +75,13 @@ case "${1:-}" in
  restart) docker compose --env-file .env.server -f compose.server.yml -f compose.devices.yml up -d --build ;;
  backup) tar -czf "/root/uhv-sentinel-data-$(date +%Y%m%d-%H%M%S).tar.gz" server-data .env.server compose.devices.yml; echo 'Backup stored in /root' ;;
  update) python3 scripts/host_tasks.py update ;;
- *) echo 'Usage: sudo uhv-sentinel {status|logs|devices|restart|backup|update}'; exit 2 ;;
+ maintenance) systemctl status uhv-sentinel-maintenance.service --no-pager ;;
+ *) echo 'Usage: sudo uhv-sentinel {status|logs|devices|restart|backup|update|maintenance}'; exit 2 ;;
 esac
 EOF
 chmod 0755 /usr/local/sbin/uhv-sentinel
 systemctl daemon-reload
-systemctl enable --now uhv-sentinel-host.timer uhv-sentinel-update.path
+systemctl enable --now uhv-sentinel-host.timer uhv-sentinel-update.path uhv-sentinel-maintenance.path uhv-sentinel-reboot.path
 systemctl start uhv-sentinel-host.service
 # Protect credentials in logs, do not print password a second time.
 docker compose --env-file .env.server -f compose.server.yml -f compose.devices.yml up -d --build

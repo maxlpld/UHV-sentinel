@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import os
+import os
 import re
 import threading
 import time
@@ -77,7 +78,7 @@ def host_telemetry(data_dir: Path) -> dict:
         return {'available': True, **{key: data.get(key) for key in
                 ('hostname', 'updated_at', 'uptime_seconds', 'cpu_temp_c', 'cpu_temp_source',
                  'disk_total_bytes', 'disk_free_bytes', 'memory_total_bytes',
-                 'memory_available_bytes', 'load_1m')}}
+                 'memory_available_bytes', 'load_1m', 'boot_id')}}
     except (OSError, ValueError, TypeError):
         return {'available': False, 'message': 'Cannot parse host measurements'}
 
@@ -103,3 +104,72 @@ def summarize_systems(store, poller) -> list:
                      'healthy': sum(item.get('state') == 'ok' for item in live.values()),
                      'url': '/s/' + slug, 'chambers': chambers})
     return rows
+
+
+# Host-only maintenance is executed by separate root-owned systemd units.
+# The API is never allowed to send command strings, package names, or paths.
+MAINTENANCE_FILE = 'maintenance-status.json'
+MAINTENANCE_REQUEST = 'maintenance-request.json'
+REBOOT_REQUEST = 'maintenance-reboot.json'
+
+
+def _maintenance_file(data_dir: Path, filename: str) -> dict:
+    try:
+        value = json.loads((Path(data_dir) / filename).read_text(encoding='utf-8'))
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def get_maintenance_status(data_dir: Path) -> dict:
+    state = _maintenance_file(data_dir, MAINTENANCE_FILE)
+    state.setdefault('state', 'idle')
+    state.setdefault('progress', 0)
+    state.setdefault('logs', [])
+    state['pending'] = (Path(data_dir) / MAINTENANCE_REQUEST).exists()
+    state['reboot_pending'] = (Path(data_dir) / REBOOT_REQUEST).exists()
+    # Check for an actual change of Linux boot ID before claiming reboot succeeded.
+    if state.get('state') == 'rebooting':
+        host = host_telemetry(data_dir)
+        if (host.get('available') and host.get('boot_id') and state.get('boot_id_before')
+                and host.get('boot_id') != state.get('boot_id_before')
+                and float(host.get('updated_at', 0)) >= float(state.get('reboot_requested_at', 0))):
+            state['state'] = 'restarted'
+            state['stage'] = 'Ubuntu Server restarted successfully'
+            state['progress'] = 100
+    state['busy'] = state['pending'] or state.get('state') in ('checking', 'installing')
+    return state
+
+
+def queue_maintenance(data_dir: Path, kind: str) -> None:
+    if kind not in ('check', 'install'):
+        raise ValueError('Unsupported maintenance request')
+    if any((Path(data_dir)/name).exists() for name in
+           (MAINTENANCE_REQUEST, REBOOT_REQUEST, 'update-request.json')):
+        raise ValueError('A system update or reboot request is already pending')
+    status = get_maintenance_status(data_dir)
+    if status.get('state') in ('checking', 'installing'):
+        if time.time() - float(status.get('updated_at', 0)) < 4 * 3600:
+            raise ValueError('Another maintenance operation is running')
+        if kind == 'install':
+            raise ValueError('The previous maintenance process was interrupted. Check again first')
+    if kind == 'install':
+        if (status.get('state') not in ('ready', 'up-to-date') or
+                time.time() - float(status.get('checked_at', 0)) > 3600):
+            raise ValueError('First check Ubuntu package updates (within one hour)')
+        if status.get('removals') or not status.get('can_install'):
+            raise ValueError('Automatic upgrade would remove packages. Review from SSH')
+    # Fixed request schema; browser payload cannot affect the command list.
+    with (Path(data_dir) / MAINTENANCE_REQUEST).open('x', encoding='utf-8') as stream:
+        json.dump({'kind': kind, 'requested_at': time.time()}, stream)
+
+
+def queue_reboot(data_dir: Path) -> None:
+    status = get_maintenance_status(data_dir)
+    if status.get('state') != 'completed' or not status.get('can_reboot'):
+        raise ValueError('A successful maintenance run is required before restarting')
+    if any((Path(data_dir)/p).exists() for p in
+           (MAINTENANCE_REQUEST, REBOOT_REQUEST, 'update-request.json')):
+        raise ValueError('An operation is already pending')
+    with (Path(data_dir) / REBOOT_REQUEST).open('x', encoding='utf-8') as stream:
+        json.dump({'kind': 'reboot', 'requested_at': time.time()}, stream)

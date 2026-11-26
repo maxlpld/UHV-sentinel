@@ -16,7 +16,8 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
 from server.core import DEVICE_TYPES,Store,Poller
-from server.hub import summarize_systems, host_telemetry, get_release_status, queue_update
+from server.hub import (summarize_systems, host_telemetry, get_release_status, queue_update,
+                        get_maintenance_status, queue_maintenance, queue_reboot)
 
 COOKIE='uhv_session'
 TTL=8*3600
@@ -141,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
                     'shortcuts':data.shortcuts()})
             if bits==['api','hub','update']:
                 return self._send(200,get_release_status(self.server.store.path.parent))
+            if bits==['api','hub','maintenance']:
+                return self._send(200,get_maintenance_status(self.server.store.path.parent))
             if bits==['api','types']:return self._send(200,DEVICE_TYPES)
             if bits==['api','systems']:
                 result=[]
@@ -192,6 +195,15 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('No newer GitHub release available; check update status first')
                 queue_update(self.server.store.path.parent)
                 return self._send(202,{'queued':True,'message':'Host updater will apply the release shortly'})
+            if len(path)==4 and path[:3]==['api','hub','maintenance']:
+                self._body()  # consume body; only the URL action is accepted
+                if path[3] in ('check','install'):
+                    queue_maintenance(self.server.store.path.parent, path[3])
+                elif path[3]=='reboot':
+                    queue_reboot(self.server.store.path.parent)
+                else:
+                    return self._fail(404,'Unknown maintenance action')
+                return self._send(202,{'queued':True,'action':path[3]})
             if path==['api','hub','shortcuts']:
                 data=self._body();ident=self.server.store.add_shortcut(data.get('title',''),data.get('url',''))
                 return self._send(201,{'id':ident})

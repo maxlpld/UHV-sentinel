@@ -38,7 +38,11 @@ def stats():
     values = {'updated_at': time.time(), 'hostname': socket.gethostname(),
               'uptime_seconds': None, 'cpu_temp_c': None, 'cpu_temp_source': None,
               'disk_total_bytes': None, 'disk_free_bytes': None,
-              'memory_total_bytes': None, 'memory_available_bytes': None, 'load_1m': None}
+              'memory_total_bytes': None, 'memory_available_bytes': None, 'load_1m': None,
+              'boot_id': None}
+    try:
+        values['boot_id'] = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    except OSError: pass
     try:
         values['uptime_seconds'] = float(Path('/proc/uptime').read_text().split()[0])
         values['load_1m'] = float(Path('/proc/loadavg').read_text().split()[0])
@@ -99,7 +103,7 @@ def _compose():
 def update():
     req = DATA / 'update-request.json'
     if not req.exists(): return
-    with (DATA / '.updater.lock').open('a+') as lock:
+    with Path('/run/lock/uhv-sentinel-ops.lock').open('a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if not req.exists(): return
         old = None

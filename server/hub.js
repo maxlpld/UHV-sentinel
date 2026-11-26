@@ -77,7 +77,7 @@ $('hub-add-shortcut').addEventListener('click',()=>modal('Add link shortcut',
  ],async x=>{await api('hub/shortcuts','POST',x);await refreshHub()}));
 $('hub-settings').addEventListener('click',()=>{
  state.current=null;history.pushState({},'','/settings');$('overview').hidden=true;$('system-view').hidden=true;$('hub-settings-view').hidden=false;
- $('hub-name-input').value=lastHub?.title||'UHV Sentinel Hub';refreshUpdate();
+ $('hub-name-input').value=lastHub?.title||'UHV Sentinel Hub';refreshUpdate();refreshMaintenance();
 });
 $('hub-save-name').addEventListener('click',async()=>{try{
  await api('hub/settings','POST',{title:$('hub-name-input').value});
@@ -135,3 +135,57 @@ window.addEventListener('popstate',()=>{
 });
 // Restore settings view once login succeeds, even if the user opened its URL directly.
 const oldShowApp=showApp;showApp=function(){oldShowApp();if(location.pathname==='/settings')setTimeout(()=>{$('hub-settings').click();history.replaceState({},'','/settings')},0)};
+
+
+// Ubuntu host maintenance is a separate, root-owned systemd worker.
+// The browser never transmits a shell command, package name, or reboot delay.
+let maintenanceRefreshing=false;
+async function refreshMaintenance(){
+ if(maintenanceRefreshing || !state.csrf || $('hub-settings-view').hidden)return;
+ maintenanceRefreshing=true;
+ try{
+  const info=await api('hub/maintenance');
+  const p=Math.max(0,Math.min(100,Number(info.progress)||0));
+  $('maintenance-progress').value=p;$('maintenance-percent').textContent=p+'%';
+  $('maintenance-stage').textContent=info.stage||'Idle';
+  const active=!!info.pending||!!info.reboot_pending||['checking','installing','rebooting'].includes(info.state);
+  $('maintenance-check').disabled=active;
+  $('maintenance-install').disabled=active||!(['ready','up-to-date'].includes(info.state)&&info.can_install);
+  $('maintenance-reboot').disabled=active||!(info.state==='completed'&&info.can_reboot);
+  const summary=[];
+  summary.push('Status: '+(info.state||'idle'));
+  if(info.packages_count!==undefined)summary.push('Ubuntu packages: '+info.packages_count);
+  if(info.docker_version)summary.push(info.docker_version);
+  if(info.reboot_required)summary.push('Ubuntu reports reboot required');
+  if(info.message)summary.push(info.message);
+  if(info.error)summary.push('Error: '+info.error);
+  if(info.pending)summary.push('Waiting for host maintenance service');
+  if(info.reboot_pending)summary.push('Restart request queued');
+  $('maintenance-summary').textContent=summary.join(' · ');
+  const lines=Array.isArray(info.logs)?info.logs:[];
+  const box=$('maintenance-logs');
+  const scroll=box.scrollHeight-box.clientHeight-box.scrollTop<40;
+  const output=lines.length?lines.join('\n'):'No logs yet.';
+  if(box.textContent!==output)box.textContent=output;
+  if(scroll)box.scrollTop=box.scrollHeight;
+  const restarting=info.state==='rebooting';
+  $('maintenance-reconnect').textContent=restarting?'Ubuntu Server is restarting. The page will reconnect automatically when the dashboard returns.':
+    info.state==='restarted'?'Server reboot completed; dashboard is available again.':'';
+ }catch(err){$('maintenance-summary').textContent='Dashboard temporarily unavailable: '+err.message+'. Retrying automatically…';}
+ finally{maintenanceRefreshing=false}
+}
+async function requestHostMaintenance(action,question){
+ if(!confirm(question))return;
+ const buttons=['maintenance-check','maintenance-install','maintenance-reboot'];
+ for(const name of buttons)$(name).disabled=true;
+ $('maintenance-summary').textContent='Requesting '+action+'…';
+ try{await api('hub/maintenance/'+action,'POST',{});await refreshMaintenance()}
+ catch(err){$('maintenance-summary').textContent=err.message;await refreshMaintenance()}
+}
+$('maintenance-check').addEventListener('click',()=>requestHostMaintenance('check',
+ 'Refresh Ubuntu package lists and check Docker versions? No software will be installed. This requires outbound access to package repositories.'));
+$('maintenance-install').addEventListener('click',()=>requestHostMaintenance('install',
+ 'Install Ubuntu full-upgrade and Docker updates now? This may restart Docker, interrupt ALL RT-A/RT-B monitoring, and temporarily disconnect this dashboard. Do not proceed during a critical experiment.'));
+$('maintenance-reboot').addEventListener('click',()=>requestHostMaintenance('reboot',
+ 'REBOOT this entire Ubuntu Server now? ALL instruments will stop recording during the restart; the dashboard will disconnect until the server returns.'));
+setInterval(refreshMaintenance,2000);

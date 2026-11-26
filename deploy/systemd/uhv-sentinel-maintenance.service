@@ -1,0 +1,9 @@
+[Unit]
+Description=Check or install Ubuntu/Docker system updates for UHV Sentinel
+After=network-online.target docker.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/uhv-sentinel/scripts/system_maintenance.py process
+TimeoutStartSec=10800
+UMask=0022

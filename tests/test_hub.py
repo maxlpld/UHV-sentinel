@@ -70,11 +70,11 @@ class HubTests(unittest.TestCase):
         class MockResponse:
             def __enter__(self):return self
             def __exit__(self,*args):return False
-            def read(self,n):return b'{"tag_name": "v0.0.7"}'
+            def read(self,n):return b'{"tag_name": "v0.0.8"}'
         with patch('server.hub.urllib.request.urlopen', return_value=MockResponse()):
             hub._cache['at']=0
             result=get_release_status(self.store.path.parent)
-        self.assertEqual(result['latest'],'v0.0.7')
+        self.assertEqual(result['latest'],'v0.0.8')
         self.assertTrue(result['available'])
         self.assertFalse((self.store.path.parent/'update-request.json').exists())
 

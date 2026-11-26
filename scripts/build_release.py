@@ -40,7 +40,7 @@ def build(output: Path | None = None) -> tuple[Path, Path]:
     server_zip = folder / 'uhv-sentinel-server-release.zip'
     server_files = [
         'Dockerfile.server', 'compose.server.yml', '.dockerignore', 'INSTALL_UBUNTU_SERVER.sh',
-        'deploy/Caddyfile', 'scripts/server_setup.py', 'scripts/host_tasks.py', 'scripts/map_serial.py',
+        'deploy/Caddyfile', 'scripts/server_setup.py', 'scripts/host_tasks.py', 'scripts/system_maintenance.py', 'scripts/map_serial.py',
         'docs/UBUNTU_SERVER_DOCKER.md', 'README.md', 'CHANGELOG.md',
         'version.py', 'vacuum_extra_devices.py', 'epimax_network.py',
         'tdk_lambda.py', 'impac_pyrometer.py',

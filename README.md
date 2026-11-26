@@ -2,10 +2,30 @@
 
 **Ubuntu Server / Docker is the recommended deployment.** One always-on server monitors independently configured vacuum systems through a password-protected, local HTTPS dashboard. Start on the hub homepage, view hardware health/storage/uptime/CPU temperature (if detected), and open each system with a dedicated URL.
 
+
+### Hub Settings → Ubuntu Server & Docker maintenance (v0.0.7)
+
+The administrator can **Check for system updates**, **Install updates**, inspect a stage-based progress bar and live logs, and (after a successful install) **Restart Ubuntu Server now**. All RT-A/RT-B systems share one host; **installing packages, restarting Docker or rebooting temporarily pauses monitoring and recording**. Schedule updates outside of active experiments.
+
+The check refreshes APT package lists and lists upgrade candidates. The install operation runs `apt-get update`, simulates `apt-get full-upgrade` and refuses to proceed if it would remove any packages, then runs a non-interactive `apt-get full-upgrade` preserving existing local config, refreshes the Caddy and Python Docker images, and restores the services with Docker Compose. A confirmed reboot is a separate action; **no automatic reboot occurs**. The progress bar shows completed phases, not the percentage of individual APT packages. Docker image updates are checked during installation, not counted in the APT upgrade count.
+
+For security, the web container has **no Docker socket, sudo, or host shell access**. Authenticated, CSRF-protected requests produce fixed-action records processed by root-owned systemd units on the Ubuntu host. Logs and status are streamed back to the Hub from bounded records; the browser cannot submit arbitrary commands. The dashboard stays private to your configured interface; **outbound access** to Ubuntu repositories and Docker Hub is required to download updates. If your network restricts outbound access, contact university IT.
+
+A successful reboot returns the dashboard when Docker auto-starts, provided the host networking, storage, Docker service and local firewall recover correctly. Do not rely on remote reboot as the only administrative access; keep SSH or local console access available.
+
+For an existing managed Ubuntu installation, install v0.0.7 using:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/maxlpld/UHV-sentinel/v0.0.7/INSTALL_UBUNTU_SERVER.sh -o /tmp/uhv-install.sh
+sudo bash /tmp/uhv-install.sh
+```
+
+The installer registers `uhv-sentinel-maintenance.{path,service}` and `uhv-sentinel-reboot.{path,service}`, without resetting profiles, local access settings, or database history.
+
 ### Ubuntu Server 24.04 / 26.04 — copy these two commands
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/maxlpld/UHV-sentinel/v0.0.6/INSTALL_UBUNTU_SERVER.sh -o /tmp/uhv-install.sh
+curl -fsSL https://raw.githubusercontent.com/maxlpld/UHV-sentinel/v0.0.7/INSTALL_UBUNTU_SERVER.sh -o /tmp/uhv-install.sh
 sudo bash /tmp/uhv-install.sh
 ```
 

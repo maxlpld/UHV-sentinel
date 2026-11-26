@@ -1,0 +1,8 @@
+[Unit]
+Description=Execute confirmed UHV Sentinel host reboot
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/uhv-sentinel/scripts/system_maintenance.py reboot
+TimeoutStartSec=60
+UMask=0022

@@ -1,3 +1,11 @@
+## v0.0.7 — Ubuntu Server maintenance center
+
+- Hub Settings: authenticated Ubuntu and Docker update check/install, stage progress, live logs, and a separately confirmed host reboot.
+- Root-owned systemd maintenance/reboot workers with fixed command schemas and operation locking; Docker itself remains unprivileged.
+- Non-interactive apt full-upgrade with plan safety check, Docker image refresh, restart and state retention.
+- Status survives browser disconnects and reports host boot-ID change after a reboot.
+- Existing laboratory system configurations, profiles and recordings are unaffected by the change.
+
 ## v0.0.6 — Hub stabilization (2026-11-25)
 
 - Close SQLite connections explicitly across Windows and Linux, avoiding locked databases.
